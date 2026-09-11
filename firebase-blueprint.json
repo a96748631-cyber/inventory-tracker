@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "InventoryPart": {
+      "title": "InventoryPart",
+      "description": "Fleet commercial autoparts tracking item",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique part identifier",
+          "maxLength": 128
+        },
+        "partNumber": {
+          "type": "string",
+          "description": "Manufacturer part number",
+          "maxLength": 128
+        },
+        "itemName": {
+          "type": "string",
+          "description": "Descriptive part name",
+          "maxLength": 256
+        },
+        "partDescription": {
+          "type": "string",
+          "description": "Detailed specifications or usage description",
+          "maxLength": 4096
+        },
+        "category": {
+          "type": "string",
+          "description": "Vehicle and machinery category",
+          "enum": [
+            "Truck Parts",
+            "Bus Parts",
+            "Trailer Parts",
+            "Passenger Car Parts",
+            "Heavy Equipment Parts",
+            "Van & Delivery Fleet",
+            "Universal & Workshop"
+          ]
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Part photo URL or vector preview",
+          "maxLength": 200000
+        },
+        "supplierName": {
+          "type": "string",
+          "description": "Fleet supplier or OEM distributor name",
+          "maxLength": 256
+        },
+        "unitPrice": {
+          "type": "number",
+          "description": "Unit price in dollars"
+        },
+        "quantityInStock": {
+          "type": "number",
+          "description": "Current on-hand warehouse quantity"
+        },
+        "reorderLevel": {
+          "type": "number",
+          "description": "Minimum threshold before restock required"
+        },
+        "lastRestockedDate": {
+          "type": "string",
+          "description": "Date of latest restock in YYYY-MM-DD",
+          "maxLength": 64
+        },
+        "compatibility": {
+          "type": "string",
+          "description": "Engine, chassis or fleet compatibility notes",
+          "maxLength": 1024
+        },
+        "oemReference": {
+          "type": "string",
+          "description": "Cross-reference OEM number",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "id",
+        "partNumber",
+        "itemName",
+        "category",
+        "unitPrice",
+        "quantityInStock",
+        "reorderLevel"
+      ]
+    }
+  },
+  "firestore": {
+    "/inventory_parts/{partId}": {
+      "schema": "InventoryPart",
+      "description": "Global commercial fleet inventory parts collection accessible by team"
+    }
+  }
+}

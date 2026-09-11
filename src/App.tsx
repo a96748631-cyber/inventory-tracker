@@ -10,6 +10,8 @@ import { RestockModal } from './components/RestockModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { NetworkShareModal } from './components/NetworkShareModal';
 import { inventoryApi, NetworkInfo } from './api/inventoryApi';
+import { firestoreService } from './api/firestoreService';
+import { testFirestoreConnection } from './firebase';
 import { CheckCircle2, AlertTriangle, Info, Truck } from 'lucide-react';
 
 const STORAGE_KEY = 'mashkay_autoparts_inventory_v1';
@@ -51,74 +53,39 @@ export default function App() {
     syncVersionRef.current = syncVersion;
   }, [syncVersion]);
 
-  // Initial load and continuous network synchronization
+  // Real-time Firestore cloud database subscription & network info
   useEffect(() => {
     let isMounted = true;
 
-    const initSync = async () => {
-      try {
-        const [invResult, netResult] = await Promise.allSettled([
-          inventoryApi.getInventory(),
-          inventoryApi.getNetworkInfo(),
-        ]);
+    // 1. Test Firestore connectivity on boot
+    testFirestoreConnection().catch((err) => {
+      console.warn('Firestore connectivity check note:', err);
+    });
 
-        if (!isMounted) return;
-
-        if (invResult.status === 'fulfilled' && invResult.value) {
-          setItems(invResult.value.items);
-          setSyncVersion(invResult.value.version);
-          syncVersionRef.current = invResult.value.version;
-          setIsSyncConnected(true);
-        }
-        if (netResult.status === 'fulfilled' && netResult.value) {
-          setNetworkInfo(netResult.value);
-        }
-      } catch (err) {
-        console.warn('Backend sync unavailable, using local fallback:', err);
+    // 2. Fetch local network info for the modal
+    inventoryApi.getNetworkInfo().then((info) => {
+      if (isMounted && info) {
+        setNetworkInfo(info);
       }
-    };
+    }).catch(() => {});
 
-    initSync();
-
-    // Polling interval to detect changes from other computers every 2.5s
-    const pollInterval = setInterval(async () => {
-      try {
-        const status = await inventoryApi.getStatus();
+    // 3. Real-time live synchronization via Firestore onSnapshot
+    const unsubscribe = firestoreService.subscribeToParts(
+      (cloudItems) => {
         if (!isMounted) return;
+        setItems(cloudItems);
         setIsSyncConnected(true);
-
-        if (status.version > syncVersionRef.current) {
-          const fresh = await inventoryApi.getInventory();
-          if (!isMounted) return;
-          setItems(fresh.items);
-          setSyncVersion(fresh.version);
-          syncVersionRef.current = fresh.version;
-          showToast(`Catalog updated live from network (v${fresh.version})`, 'info');
-        }
-      } catch (err) {
+        setSyncVersion((v) => v + 1);
+      },
+      (error) => {
+        console.warn('Firestore live subscription fallback:', error);
         if (isMounted) setIsSyncConnected(false);
       }
-    }, 2500);
-
-    // Immediate sync check on tab focus
-    const handleWindowFocus = async () => {
-      try {
-        const status = await inventoryApi.getStatus();
-        if (status.version > syncVersionRef.current) {
-          const fresh = await inventoryApi.getInventory();
-          setItems(fresh.items);
-          setSyncVersion(fresh.version);
-          syncVersionRef.current = fresh.version;
-        }
-      } catch {}
-    };
-
-    window.addEventListener('focus', handleWindowFocus);
+    );
 
     return () => {
       isMounted = false;
-      clearInterval(pollInterval);
-      window.removeEventListener('focus', handleWindowFocus);
+      unsubscribe();
     };
   }, []);
 
@@ -139,34 +106,33 @@ export default function App() {
   };
 
   const handleUpdateStock = async (id: string, delta: number) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const newStock = Math.max(0, item.quantityInStock + delta);
+    const oldStatus = computeReorderStatus(item.quantityInStock, item.reorderLevel);
+    const newStatus = computeReorderStatus(newStock, item.reorderLevel);
+
+    if (oldStatus !== newStatus) {
+      showToast(
+        `Status changed for ${item.partNumber}: now "${newStatus}" (Stock: ${newStock}, Reorder Level: ${item.reorderLevel})`,
+        newStatus === 'Reorder' ? 'info' : 'success'
+      );
+    }
+
     // Optimistic UI update
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const newStock = Math.max(0, item.quantityInStock + delta);
-          const oldStatus = computeReorderStatus(item.quantityInStock, item.reorderLevel);
-          const newStatus = computeReorderStatus(newStock, item.reorderLevel);
-
-          if (oldStatus !== newStatus) {
-            showToast(
-              `Status changed for ${item.partNumber}: now "${newStatus}" (Stock: ${newStock}, Reorder Level: ${item.reorderLevel})`,
-              newStatus === 'Reorder' ? 'info' : 'success'
-            );
-          }
-          return { ...item, quantityInStock: newStock };
-        }
-        return item;
-      })
+      prev.map((it) => (it.id === id ? { ...it, quantityInStock: newStock } : it))
     );
 
-    // Sync with central server
+    // Save to Firestore cloud database
     try {
-      const res = await inventoryApi.adjustStock(id, delta);
-      setSyncVersion(res.version);
-      syncVersionRef.current = res.version;
+      await firestoreService.adjustStock(id, newStock);
     } catch (err) {
-      console.warn('Failed to sync stock update to central server:', err);
+      console.warn('Firestore stock sync error:', err);
     }
+
+    // Also notify local server
+    inventoryApi.adjustStock(id, delta).catch(() => {});
   };
 
   const handleSaveItem = async (itemData: Omit<InventoryItem, 'id'>, id?: string) => {
@@ -177,12 +143,11 @@ export default function App() {
       );
       showToast(`Updated part ${itemData.partNumber}`);
       try {
-        const res = await inventoryApi.updateItem(id, itemData);
-        setSyncVersion(res.version);
-        syncVersionRef.current = res.version;
+        await firestoreService.updatePart(id, itemData);
       } catch (err) {
-        console.warn('Failed to sync item update to server:', err);
+        console.warn('Firestore item update error:', err);
       }
+      inventoryApi.updateItem(id, itemData).catch(() => {});
     } else {
       // Add new
       const tempId = `part-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -191,14 +156,13 @@ export default function App() {
         id: tempId,
       };
       setItems((prev) => [newItem, ...prev]);
-      showToast(`Added part ${itemData.partNumber} to inventory`);
+      showToast(`Added part ${itemData.partNumber} to cloud database`);
       try {
-        const res = await inventoryApi.createItem(newItem);
-        setSyncVersion(res.version);
-        syncVersionRef.current = res.version;
+        await firestoreService.createPart(newItem);
       } catch (err) {
-        console.warn('Failed to sync new part to server:', err);
+        console.warn('Firestore item create error:', err);
       }
+      inventoryApi.createItem(newItem).catch(() => {});
     }
   };
 
@@ -214,12 +178,11 @@ export default function App() {
     showToast(`Removed part ${deleted.partNumber}`, 'info');
 
     try {
-      const res = await inventoryApi.deleteItem(deleted.id);
-      setSyncVersion(res.version);
-      syncVersionRef.current = res.version;
+      await firestoreService.deletePart(deleted.id);
     } catch (err) {
-      console.warn('Failed to sync delete to server:', err);
+      console.warn('Firestore delete error:', err);
     }
+    inventoryApi.deleteItem(deleted.id).catch(() => {});
   };
 
   const handleDeleteBatch = (itemsToDelete: InventoryItem[]) => {
@@ -230,44 +193,40 @@ export default function App() {
   const handleConfirmBatchDelete = async () => {
     if (!itemsPendingBatchDelete || itemsPendingBatchDelete.length === 0) return;
     const batch = itemsPendingBatchDelete;
-    const idsToDelete = new Set(batch.map((i) => i.id));
+    const idsToDelete = batch.map((i) => i.id);
     setItemsPendingBatchDelete(null);
-    setItems((prev) => prev.filter((i) => !idsToDelete.has(i.id)));
+    setItems((prev) => prev.filter((i) => !idsToDelete.includes(i.id)));
     showToast(`Removed ${batch.length} parts from inventory`, 'info');
 
     try {
-      const res = await inventoryApi.batchDelete(batch.map((i) => i.id));
-      setSyncVersion(res.version);
-      syncVersionRef.current = res.version;
+      await firestoreService.deleteBatch(idsToDelete);
     } catch (err) {
-      console.warn('Failed to sync batch delete to server:', err);
+      console.warn('Firestore batch delete error:', err);
     }
+    inventoryApi.batchDelete(idsToDelete).catch(() => {});
   };
 
   const handleRestock = async (itemId: string, addedQuantity: number, restockDate: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const newStock = item.quantityInStock + addedQuantity;
+
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const newStock = item.quantityInStock + addedQuantity;
-          return {
-            ...item,
-            quantityInStock: newStock,
-            lastRestockedDate: restockDate,
-          };
-        }
-        return item;
-      })
+      prev.map((it) =>
+        it.id === itemId
+          ? { ...it, quantityInStock: newStock, lastRestockedDate: restockDate }
+          : it
+      )
     );
     showToast(`Restocked +${addedQuantity} units on ${restockDate}. Status re-evaluated.`);
 
     try {
-      const res = await inventoryApi.adjustStock(itemId, addedQuantity);
-      await inventoryApi.updateItem(itemId, { lastRestockedDate: restockDate });
-      setSyncVersion(res.version + 1);
-      syncVersionRef.current = res.version + 1;
+      await firestoreService.adjustStock(itemId, newStock, restockDate);
     } catch (err) {
-      console.warn('Failed to sync restock to server:', err);
+      console.warn('Firestore restock sync error:', err);
     }
+    inventoryApi.adjustStock(itemId, addedQuantity).catch(() => {});
+    inventoryApi.updateItem(itemId, { lastRestockedDate: restockDate }).catch(() => {});
   };
 
   const handleResetData = () => {
@@ -285,15 +244,14 @@ export default function App() {
     setIsAddEditModalOpen(false);
     setIsResetConfirmOpen(false);
     setResetKey((k) => k + 1);
-    showToast('Everything cleared and reset to sample catalog');
+    showToast('Everything reset to standard catalog in Firestore');
 
     try {
-      const res = await inventoryApi.resetCatalog(false);
-      setSyncVersion(res.version);
-      syncVersionRef.current = res.version;
+      await firestoreService.resetCatalog(false);
     } catch (err) {
-      console.warn('Failed to sync reset to server:', err);
+      console.warn('Firestore reset error:', err);
     }
+    inventoryApi.resetCatalog(false).catch(() => {});
   };
 
   const handleClearAllData = async () => {
@@ -306,15 +264,14 @@ export default function App() {
     setIsAddEditModalOpen(false);
     setIsResetConfirmOpen(false);
     setResetKey((k) => k + 1);
-    showToast('All inventory items and filters cleared (0 items)', 'info');
+    showToast('All inventory items cleared (0 items)', 'info');
 
     try {
-      const res = await inventoryApi.resetCatalog(true);
-      setSyncVersion(res.version);
-      syncVersionRef.current = res.version;
+      await firestoreService.resetCatalog(true);
     } catch (err) {
-      console.warn('Failed to sync clear to server:', err);
+      console.warn('Firestore clear error:', err);
     }
+    inventoryApi.resetCatalog(true).catch(() => {});
   };
 
   const handleExportCSV = () => {

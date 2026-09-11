@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
                       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
                       : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
                   }`}
-                  title="Click to view IP address & connect other computers on your network"
+                  title="Click to view cloud connection & share with other computers"
                 >
                   <span className="relative flex h-2 w-2">
                     <span
@@ -59,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ></span>
                   </span>
                   <Wifi className="w-3 h-3" />
-                  <span>Network Sync Active (v{syncVersion})</span>
+                  <span>Cloud Database Live (Firebase)</span>
                 </button>
               </div>
               <p className="text-sm text-slate-400 mt-0.5">

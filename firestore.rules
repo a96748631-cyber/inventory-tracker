@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidPart(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.partNumber is string && data.partNumber.size() > 0 && data.partNumber.size() <= 128 &&
+             data.itemName is string && data.itemName.size() > 0 && data.itemName.size() <= 256 &&
+             (!('partDescription' in data) || (data.partDescription is string && data.partDescription.size() <= 4096)) &&
+             data.category in [
+               'Truck Parts',
+               'Bus Parts',
+               'Trailer Parts',
+               'Passenger Car Parts',
+               'Heavy Equipment Parts',
+               'Van & Delivery Fleet',
+               'Universal & Workshop'
+             ] &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 200000)) &&
+             (!('supplierName' in data) || (data.supplierName is string && data.supplierName.size() <= 256)) &&
+             data.unitPrice is number && data.unitPrice >= 0 &&
+             data.quantityInStock is number && data.quantityInStock >= 0 &&
+             data.reorderLevel is number && data.reorderLevel >= 0 &&
+             (!('lastRestockedDate' in data) || (data.lastRestockedDate is string && data.lastRestockedDate.size() <= 64)) &&
+             (!('compatibility' in data) || (data.compatibility is string && data.compatibility.size() <= 1024)) &&
+             (!('oemReference' in data) || (data.oemReference is string && data.oemReference.size() <= 128));
+    }
+
+    match /inventory_parts/{partId} {
+      allow get, list: if true;
+      allow create: if isValidId(partId) && isValidPart(incoming()) && incoming().id == partId;
+      allow update: if isValidId(partId) && isValidPart(incoming()) && incoming().id == partId;
+      allow delete: if isValidId(partId);
+    }
+  }
+}
