@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { InventoryItem, PartCategory, ReorderStatus, computeReorderStatus } from '../types';
+import { ImageLightboxModal } from './ImageLightboxModal';
 import {
   Search,
   ArrowUpDown,
@@ -17,19 +18,22 @@ import {
   Layers,
   Image as ImageIcon,
   Building2,
-  ExternalLink,
-  Copy,
-  Check,
+  ZoomIn,
+  Camera,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 
 interface InventoryTableProps {
   items: InventoryItem[];
   onUpdateStock: (id: string, delta: number) => void;
   onEditItem: (item: InventoryItem) => void;
-  onDeleteItem: (id: string) => void;
+  onDeleteItem: (item: InventoryItem) => void;
+  onDeleteBatch?: (items: InventoryItem[]) => void;
   onRestockClick: (item: InventoryItem) => void;
   statusFilter: 'ALL' | ReorderStatus;
   setStatusFilter: (status: 'ALL' | ReorderStatus) => void;
+  resetKey?: number;
 }
 
 type SortField =
@@ -50,21 +54,26 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   onUpdateStock,
   onEditItem,
   onDeleteItem,
+  onDeleteBatch,
   onRestockClick,
   statusFilter,
   setStatusFilter,
+  resetKey,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | PartCategory>('ALL');
   const [sortField, setSortField] = useState<SortField>('partNumber');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [previewImageItem, setPreviewImageItem] = useState<InventoryItem | null>(null);
 
-  const handleCopyUrl = (url: string) => {
-    navigator.clipboard.writeText(url);
-    setCopiedUrl(url);
-    setTimeout(() => setCopiedUrl(null), 2000);
-  };
+  // When resetKey changes (e.g. from clicking Reset 3 Sample Rows), clear all search and filter states
+  useEffect(() => {
+    setSearchQuery('');
+    setCategoryFilter('ALL');
+    setSelectedIds(new Set());
+    setPreviewImageItem(null);
+  }, [resetKey]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -193,8 +202,17 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search part #, name, description, supplier..."
-            className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500 placeholder:text-slate-400 transition-all shadow-2xs"
+            className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500 placeholder:text-slate-400 transition-all shadow-2xs"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+              title="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Filters */}
@@ -281,14 +299,91 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               OK
             </button>
           </div>
+
+          {/* Clear Filters Button (shown whenever any filter/search is active) */}
+          {(searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL') && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setCategoryFilter('ALL');
+                setStatusFilter('ALL');
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
+              title="Clear all active filters & search query"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Clear Filters</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Batch Actions Bar (visible when 1+ rows selected) */}
+      {selectedIds.size > 0 && (
+        <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-amber-500 text-slate-950 font-bold text-[11px]">
+              {selectedIds.size}
+            </span>
+            <span className="font-semibold text-slate-800">
+              {selectedIds.size === 1 ? '1 autopart selected' : `${selectedIds.size} autoparts selected`}
+            </span>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-slate-500 hover:text-slate-800 underline ml-2 cursor-pointer"
+            >
+              Clear selection
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              id="batch-delete-btn"
+              onClick={() => {
+                const selectedItems = items.filter((i) => selectedIds.has(i.id));
+                if (onDeleteBatch && selectedItems.length > 0) {
+                  onDeleteBatch(selectedItems);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Selected ({selectedIds.size})</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table Container */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs sm:text-sm border-collapse">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-100/70 text-slate-700 font-semibold uppercase text-[11px] tracking-wider whitespace-nowrap">
+              {/* Select All Checkbox */}
+              <th className="py-3 px-3 w-10 text-center">
+                <input
+                  type="checkbox"
+                  aria-label="Select all visible parts"
+                  checked={
+                    filteredAndSortedItems.length > 0 &&
+                    filteredAndSortedItems.every((item) => selectedIds.has(item.id))
+                  }
+                  onChange={() => {
+                    const allVisibleSelected =
+                      filteredAndSortedItems.length > 0 &&
+                      filteredAndSortedItems.every((item) => selectedIds.has(item.id));
+                    if (allVisibleSelected) {
+                      setSelectedIds(new Set());
+                    } else {
+                      const next = new Set(selectedIds);
+                      filteredAndSortedItems.forEach((item) => next.add(item.id));
+                      setSelectedIds(next);
+                    }
+                  }}
+                  className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer"
+                />
+              </th>
+
               {/* 1. Part Number */}
               <th
                 onClick={() => handleSort('partNumber')}
@@ -333,14 +428,14 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 </div>
               </th>
 
-              {/* 5. Part Image URL */}
+              {/* 5. Part Picture */}
               <th
                 onClick={() => handleSort('imageUrl')}
-                className="py-3 px-3 cursor-pointer hover:bg-slate-200/60 select-none group transition-colors min-w-[190px]"
+                className="py-3 px-3 cursor-pointer hover:bg-slate-200/60 select-none group transition-colors min-w-[100px]"
               >
                 <div className="flex items-center gap-1.5">
                   <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Part Image URL</span>
+                  <span>Picture</span>
                   {renderSortIndicator('imageUrl')}
                 </div>
               </th>
@@ -424,13 +519,37 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
           <tbody className="divide-y divide-slate-100">
             {filteredAndSortedItems.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-12 text-center text-slate-500">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Layers className="w-8 h-8 text-slate-300" />
-                    <p className="font-semibold text-slate-700">No autoparts found matching your filter criteria</p>
-                    <p className="text-xs text-slate-400">
-                      Try clearing filters or search query to view all items.
-                    </p>
+                <td colSpan={13} className="py-12 text-center text-slate-500">
+                  <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto px-4">
+                    <Layers className="w-9 h-9 text-slate-300" />
+                    {items.length === 0 ? (
+                      <>
+                        <p className="font-semibold text-slate-800 text-sm">Inventory catalog is currently empty</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          All parts have been cleared. Click <strong className="text-slate-700">Add New Part</strong> above to add inventory, or click <strong className="text-slate-700">Reset 3 Sample Rows</strong> in the header to load standard fleet parts.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-slate-800 text-sm">No autoparts found matching your search or filters</p>
+                        <p className="text-xs text-slate-500">
+                          {searchQuery && `Search query: "${searchQuery}". `}
+                          {categoryFilter !== 'ALL' && `Type: ${categoryFilter}. `}
+                          {statusFilter !== 'ALL' && `Status: ${statusFilter}.`}
+                        </p>
+                        <button
+                          onClick={() => {
+                            setSearchQuery('');
+                            setCategoryFilter('ALL');
+                            setStatusFilter('ALL');
+                          }}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors cursor-pointer shadow-xs"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Clear All Filters &amp; Search</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -439,15 +558,43 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 const status = computeReorderStatus(item.quantityInStock, item.reorderLevel);
                 const isReorder = status === 'Reorder';
                 const deficit = item.reorderLevel - item.quantityInStock;
+                const isSelected = selectedIds.has(item.id);
 
                 return (
                   <tr
                     key={item.id}
                     id={`inventory-row-${item.id}`}
                     className={`transition-colors hover:bg-slate-50/80 ${
-                      isReorder ? 'bg-red-50/25' : index % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
+                      isSelected
+                        ? 'bg-amber-50/50'
+                        : isReorder
+                        ? 'bg-red-50/25'
+                        : index % 2 === 1
+                        ? 'bg-slate-50/40'
+                        : 'bg-white'
                     }`}
                   >
+                    {/* Row Checkbox */}
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${item.partNumber}`}
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(item.id)) {
+                              next.delete(item.id);
+                            } else {
+                              next.add(item.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer"
+                      />
+                    </td>
+
                     {/* 1. Part Number */}
                     <td className="py-3 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
@@ -495,33 +642,33 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                       </span>
                     </td>
 
-                    {/* 5. Part Image URL (New Column) */}
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg p-1.5 border border-slate-200/80 max-w-[220px]">
-                        <div className="w-6 h-6 rounded bg-slate-200 flex items-center justify-center text-slate-500 shrink-0 overflow-hidden">
-                          <ImageIcon className="w-3.5 h-3.5" />
+                    {/* 5. Part Picture */}
+                    <td className="py-2.5 px-3 whitespace-nowrap">
+                      {item.imageUrl ? (
+                        <div
+                          onClick={() => setPreviewImageItem(item)}
+                          className="group relative w-12 h-12 rounded-lg bg-slate-900 border border-slate-200 shadow-2xs overflow-hidden cursor-pointer hover:ring-2 hover:ring-amber-500 transition-all flex items-center justify-center"
+                          title="Click to view full picture"
+                        >
+                          <img
+                            src={item.imageUrl}
+                            alt={`${item.partNumber} picture`}
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <ZoomIn className="w-4 h-4 text-white drop-shadow-sm" />
+                          </div>
                         </div>
-                        <a
-                          href={item.imageUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={`Open image URL: ${item.imageUrl}`}
-                          className="text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[140px]"
-                        >
-                          {item.imageUrl}
-                        </a>
+                      ) : (
                         <button
-                          onClick={() => handleCopyUrl(item.imageUrl)}
-                          title="Copy image URL"
-                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors ml-auto shrink-0"
+                          onClick={() => onEditItem(item)}
+                          title="Insert picture for this part"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 border border-slate-200 transition-colors cursor-pointer"
                         >
-                          {copiedUrl === item.imageUrl ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
+                          <Camera className="w-3 h-3" />
+                          <span>+ Picture</span>
                         </button>
-                      </div>
+                      )}
                     </td>
 
                     {/* 6. Supplier Name (New Column) */}
@@ -618,7 +765,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => onDeleteItem(item.id)}
+                          onClick={() => onDeleteItem(item)}
                           title="Delete part from table"
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                         >
@@ -649,6 +796,12 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
           Mashkay Autoparts &bull; Genuine Truck, Bus &amp; Trailer Parts Tracking System
         </div>
       </div>
+
+      {/* Picture Lightbox Modal */}
+      <ImageLightboxModal
+        item={previewImageItem}
+        onClose={() => setPreviewImageItem(null)}
+      />
     </div>
   );
 };

@@ -7,6 +7,7 @@ import { FormulaBar } from './components/FormulaBar';
 import { InventoryTable } from './components/InventoryTable';
 import { AddEditModal } from './components/AddEditModal';
 import { RestockModal } from './components/RestockModal';
+import { ConfirmModal } from './components/ConfirmModal';
 import { CheckCircle2, AlertTriangle, Info, Truck } from 'lucide-react';
 
 const STORAGE_KEY = 'mashkay_autoparts_inventory_v1';
@@ -21,6 +22,7 @@ export default function App() {
           // Map to ensure new columns partDescription, imageUrl, supplierName are populated if previously undefined
           return parsed.map((item: any) => {
             const defaultItem = INITIAL_INVENTORY_ITEMS.find((init) => init.partNumber === item.partNumber);
+            const hasOldDummyUrl = item.imageUrl && item.imageUrl.includes('example.com');
             return {
               ...item,
               partDescription:
@@ -28,9 +30,9 @@ export default function App() {
                 defaultItem?.partDescription ||
                 'Genuine heavy-duty fleet autopart certified for commercial performance.',
               imageUrl:
-                item.imageUrl ||
-                defaultItem?.imageUrl ||
-                `http://example.com/images/${item.partNumber || 'part'}.jpg`,
+                (hasOldDummyUrl && defaultItem?.imageUrl)
+                  ? defaultItem.imageUrl
+                  : (item.imageUrl || defaultItem?.imageUrl || ''),
               supplierName:
                 item.supplierName ||
                 defaultItem?.supplierName ||
@@ -50,6 +52,10 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [restockingItem, setRestockingItem] = useState<InventoryItem | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
+  const [itemPendingDelete, setItemPendingDelete] = useState<InventoryItem | null>(null);
+  const [itemsPendingBatchDelete, setItemsPendingBatchDelete] = useState<InventoryItem[] | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     try {
@@ -105,13 +111,28 @@ export default function App() {
     }
   };
 
-  const handleDeleteItem = (id: string) => {
-    const item = items.find((i) => i.id === id);
-    if (!item) return;
-    if (window.confirm(`Are you sure you want to remove part "${item.partNumber} - ${item.itemName}" from inventory?`)) {
-      setItems((prev) => prev.filter((i) => i.id !== id));
-      showToast(`Removed part ${item.partNumber}`, 'info');
-    }
+  const handleDeleteItem = (item: InventoryItem) => {
+    setItemPendingDelete(item);
+  };
+
+  const handleConfirmSingleDelete = () => {
+    if (!itemPendingDelete) return;
+    setItems((prev) => prev.filter((i) => i.id !== itemPendingDelete.id));
+    showToast(`Removed part ${itemPendingDelete.partNumber}`, 'info');
+    setItemPendingDelete(null);
+  };
+
+  const handleDeleteBatch = (itemsToDelete: InventoryItem[]) => {
+    if (itemsToDelete.length === 0) return;
+    setItemsPendingBatchDelete(itemsToDelete);
+  };
+
+  const handleConfirmBatchDelete = () => {
+    if (!itemsPendingBatchDelete || itemsPendingBatchDelete.length === 0) return;
+    const idsToDelete = new Set(itemsPendingBatchDelete.map((i) => i.id));
+    setItems((prev) => prev.filter((i) => !idsToDelete.has(i.id)));
+    showToast(`Removed ${itemsPendingBatchDelete.length} parts from inventory`, 'info');
+    setItemsPendingBatchDelete(null);
   };
 
   const handleRestock = (itemId: string, addedQuantity: number, restockDate: string) => {
@@ -132,12 +153,48 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    if (window.confirm('Reset inventory to the 3 realistic sample rows (Truck, Bus, Trailer)?')) {
-      setItems(INITIAL_INVENTORY_ITEMS);
+    setIsResetConfirmOpen(true);
+  };
+
+  const handleConfirmReset = () => {
+    // Deep clone to ensure completely pristine object references
+    const freshItems: InventoryItem[] = JSON.parse(JSON.stringify(INITIAL_INVENTORY_ITEMS));
+    setItems(freshItems);
+    try {
       localStorage.removeItem(STORAGE_KEY);
-      setStatusFilter('ALL');
-      showToast('Inventory reset to 3 sample rows');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(freshItems));
+    } catch (e) {
+      console.warn('Failed to reset storage:', e);
     }
+    // Clear all filters, selections, search queries, modals, and pending states
+    setStatusFilter('ALL');
+    setEditingItem(null);
+    setRestockingItem(null);
+    setItemPendingDelete(null);
+    setItemsPendingBatchDelete(null);
+    setIsAddEditModalOpen(false);
+    setIsResetConfirmOpen(false);
+    setResetKey((k) => k + 1);
+    showToast('Everything cleared and reset to 3 standard sample rows');
+  };
+
+  const handleClearAllData = () => {
+    setItems([]);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    } catch (e) {
+      console.warn('Failed to clear inventory in storage:', e);
+    }
+    setStatusFilter('ALL');
+    setEditingItem(null);
+    setRestockingItem(null);
+    setItemPendingDelete(null);
+    setItemsPendingBatchDelete(null);
+    setIsAddEditModalOpen(false);
+    setIsResetConfirmOpen(false);
+    setResetKey((k) => k + 1);
+    showToast('All inventory items and filters cleared (0 items)', 'info');
   };
 
   const handleExportCSV = () => {
@@ -146,7 +203,7 @@ export default function App() {
       'Item Name',
       'Part Description',
       'Category',
-      'Part Image URL',
+      'Part Picture',
       'Supplier Name',
       'Unit Price',
       'Quantity in Stock',
@@ -225,6 +282,8 @@ export default function App() {
 
         {/* Inventory Tracking Table */}
         <InventoryTable
+          key={resetKey}
+          resetKey={resetKey}
           items={items}
           onUpdateStock={handleUpdateStock}
           onEditItem={(item) => {
@@ -232,6 +291,7 @@ export default function App() {
             setIsAddEditModalOpen(true);
           }}
           onDeleteItem={handleDeleteItem}
+          onDeleteBatch={handleDeleteBatch}
           onRestockClick={(item) => setRestockingItem(item)}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
@@ -247,6 +307,12 @@ export default function App() {
         }}
         onSave={handleSaveItem}
         initialItem={editingItem}
+        onDelete={(id) => {
+          const item = items.find((i) => i.id === id);
+          if (item) {
+            setItemPendingDelete(item);
+          }
+        }}
       />
 
       {/* Restock Modal */}
@@ -255,6 +321,51 @@ export default function App() {
         onClose={() => setRestockingItem(null)}
         item={restockingItem}
         onRestock={handleRestock}
+      />
+
+      {/* Single Item Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!itemPendingDelete}
+        onClose={() => setItemPendingDelete(null)}
+        onConfirm={handleConfirmSingleDelete}
+        title="Delete Autopart"
+        message={`Are you sure you want to permanently delete part "${itemPendingDelete?.partNumber} - ${itemPendingDelete?.itemName}" from your inventory catalog?`}
+        subMessage="This action will remove this part and its stock history."
+        confirmText="Delete Part"
+        confirmVariant="danger"
+      />
+
+      {/* Batch Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!itemsPendingBatchDelete && itemsPendingBatchDelete.length > 0}
+        onClose={() => setItemsPendingBatchDelete(null)}
+        onConfirm={handleConfirmBatchDelete}
+        title={`Delete ${itemsPendingBatchDelete?.length || 0} Selected Autoparts`}
+        message={`Are you sure you want to delete these ${itemsPendingBatchDelete?.length || 0} parts from your inventory?`}
+        itemsToDelete={itemsPendingBatchDelete?.map((item) => ({
+          partNumber: item.partNumber,
+          itemName: item.itemName,
+        }))}
+        subMessage="This action cannot be undone."
+        confirmText={`Delete ${itemsPendingBatchDelete?.length || 0} Parts`}
+        confirmVariant="danger"
+      />
+
+      {/* Reset Data Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isResetConfirmOpen}
+        onClose={() => setIsResetConfirmOpen(false)}
+        onConfirm={handleConfirmReset}
+        title="Reset Inventory Catalog"
+        message="Are you sure you want to reset the catalog? All added parts, modifications, search queries, category filters, and checkbox selections will be completely cleared."
+        subMessage="The catalog will be cleanly restored to the 3 standard genuine fleet sample rows (Truck, Bus, and Trailer)."
+        confirmText="Reset to 3 Sample Rows"
+        confirmVariant="warning"
+        secondaryAction={{
+          label: 'Wipe All (0 Parts)',
+          onAction: handleClearAllData,
+          variant: 'danger',
+        }}
       />
     </div>
   );

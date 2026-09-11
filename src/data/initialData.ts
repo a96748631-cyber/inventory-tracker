@@ -1,4 +1,9 @@
 import { InventoryItem } from '../types';
+import {
+  SAMPLE_TRUCK_BRAKE_IMAGE,
+  SAMPLE_BUS_DOOR_IMAGE,
+  SAMPLE_TRAILER_BELLOWS_IMAGE,
+} from './samplePartImages';
 
 export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
   {
@@ -7,7 +12,7 @@ export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
     itemName: 'Heavy-Duty Spring Brake Chamber (Type 30/30 Sealed)',
     partDescription: 'Double-diaphragm sealed emergency and service actuator built for heavy-duty commercial truck drive axles, featuring anti-corrosive epoxy housing and tamper-proof safety clamping.',
     category: 'Truck Parts',
-    imageUrl: 'http://example.com/images/MK-TRK-7420.jpg',
+    imageUrl: SAMPLE_TRUCK_BRAKE_IMAGE,
     supplierName: 'Wabco Commercial Vehicle Systems',
     unitPrice: 145.00,
     quantityInStock: 12,
@@ -22,7 +27,7 @@ export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
     itemName: 'Pneumatic Passenger Door Actuator Cylinder Assembly',
     partDescription: 'Smooth double-acting linear pneumatic actuator with integrated speed throttling control and emergency manual override for transit and city bus passenger ingress doors.',
     category: 'Bus Parts',
-    imageUrl: 'http://example.com/images/MK-BUS-2195.jpg',
+    imageUrl: SAMPLE_BUS_DOOR_IMAGE,
     supplierName: 'Knorr-Bremse Commercial Vehicle Systems',
     unitPrice: 320.00,
     quantityInStock: 28,
@@ -37,7 +42,7 @@ export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
     itemName: 'Tri-Axle Air Suspension Rolling Lobe Bellows',
     partDescription: 'Reinforced multi-ply vulcanized elastomer rolling lobe air spring with high-tensile steel bead plate, absorbing road shock and maintaining ride height on heavy-haul trailers.',
     category: 'Trailer Parts',
-    imageUrl: 'http://example.com/images/MK-TRL-9841.jpg',
+    imageUrl: SAMPLE_TRAILER_BELLOWS_IMAGE,
     supplierName: 'SAF-Holland Group',
     unitPrice: 189.50,
     quantityInStock: 8,

@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { InventoryItem, PartCategory, computeReorderStatus } from '../types';
-import { X, Check, AlertCircle } from 'lucide-react';
+import { X, Check, AlertCircle, Trash2, UploadCloud, Camera, Image as ImageIcon } from 'lucide-react';
 
 interface AddEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (item: Omit<InventoryItem, 'id'>, id?: string) => void;
   initialItem?: InventoryItem | null;
+  onDelete?: (id: string) => void;
 }
 
 export const AddEditModal: React.FC<AddEditModalProps> = ({
@@ -14,6 +15,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
   onClose,
   onSave,
   initialItem,
+  onDelete,
 }) => {
   const [partNumber, setPartNumber] = useState('');
   const [itemName, setItemName] = useState('');
@@ -28,6 +30,59 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
   const [compatibility, setCompatibility] = useState('');
   const [oemReference, setOemReference] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const processImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, WEBP, or SVG).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const rawResult = e.target?.result as string;
+      if (!rawResult) return;
+
+      if (file.type === 'image/svg+xml') {
+        setImageUrl(rawResult);
+        return;
+      }
+
+      // Optimize/compress image to keep local storage compact
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          setImageUrl(compressed);
+        } else {
+          setImageUrl(rawResult);
+        }
+      };
+      img.onerror = () => {
+        setImageUrl(rawResult);
+      };
+      img.src = rawResult;
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (initialItem) {
@@ -221,35 +276,112 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
             />
           </div>
 
-          {/* Supplier Name & Image URL */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Supplier Name
-              </label>
-              <input
-                type="text"
-                id="modal-supplier-name"
-                placeholder="e.g. Wabco Commercial Systems"
-                value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
+          {/* Supplier Name */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Supplier Name
+            </label>
+            <input
+              type="text"
+              id="modal-supplier-name"
+              placeholder="e.g. Wabco Commercial Systems"
+              value={supplierName}
+              onChange={(e) => setSupplierName(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Part Image URL
-              </label>
-              <input
-                type="text"
-                id="modal-image-url"
-                placeholder="http://example.com/images/part_number.jpg"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-mono text-xs"
-              />
-            </div>
+          {/* Part Picture (Upload / Insert Picture) */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Part Picture
+            </label>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  processImageFile(file);
+                }
+              }}
+            />
+
+            {imageUrl ? (
+              <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <div className="w-16 h-16 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 border border-slate-300">
+                  <img
+                    src={imageUrl}
+                    alt="Part preview"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-800">Picture attached</p>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                    Ready to show in inventory table
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>Change Picture</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl('')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    processImageFile(file);
+                  }
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+                  isDragging
+                    ? 'border-amber-500 bg-amber-50/50'
+                    : 'border-slate-300 hover:border-amber-500 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex flex-col items-center justify-center gap-1.5">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+                    <UploadCloud className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold text-amber-700 hover:underline">
+                      Click to insert a picture
+                    </span>
+                    <span className="text-xs text-slate-500"> or drag and drop</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    PNG, JPG, WEBP, or SVG image of the truck, bus, or trailer part
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Price & Quantities */}
@@ -385,21 +517,40 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
           </div>
 
           {/* Modal Actions */}
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              id="save-part-submit-btn"
-              className="px-5 py-2 text-sm font-semibold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-lg shadow-sm transition-colors"
-            >
-              {initialItem ? 'Update Part' : 'Add to Inventory'}
-            </button>
+          <div className="pt-4 flex items-center justify-between gap-3 border-t border-slate-100">
+            {initialItem && onDelete ? (
+              <button
+                type="button"
+                id="modal-delete-part-btn"
+                onClick={() => {
+                  onDelete(initialItem.id);
+                  onClose();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Part</span>
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                id="save-part-submit-btn"
+                className="px-5 py-2 text-sm font-semibold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-lg shadow-sm transition-colors"
+              >
+                {initialItem ? 'Update Part' : 'Add to Inventory'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
