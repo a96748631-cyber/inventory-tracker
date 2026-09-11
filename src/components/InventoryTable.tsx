@@ -22,6 +22,10 @@ import {
   Camera,
   X,
   RotateCcw,
+  Car,
+  HardHat,
+  Package,
+  Wrench,
 } from 'lucide-react';
 
 interface InventoryTableProps {
@@ -175,6 +179,16 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
         return <Bus className="w-3.5 h-3.5 text-amber-500" />;
       case 'Trailer Parts':
         return <Container className="w-3.5 h-3.5 text-emerald-500" />;
+      case 'Passenger Car Parts':
+        return <Car className="w-3.5 h-3.5 text-purple-500" />;
+      case 'Heavy Equipment Parts':
+        return <HardHat className="w-3.5 h-3.5 text-pink-500" />;
+      case 'Van & Delivery Fleet':
+        return <Package className="w-3.5 h-3.5 text-cyan-500" />;
+      case 'Universal & Workshop':
+        return <Wrench className="w-3.5 h-3.5 text-yellow-500" />;
+      default:
+        return <Layers className="w-3.5 h-3.5 text-slate-500" />;
     }
   };
 
@@ -261,6 +275,50 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
             >
               <Container className="w-3 h-3" />
               Trailer
+            </button>
+            <button
+              onClick={() => setCategoryFilter('Passenger Car Parts')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                categoryFilter === 'Passenger Car Parts'
+                  ? 'bg-purple-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Car className="w-3 h-3" />
+              Car
+            </button>
+            <button
+              onClick={() => setCategoryFilter('Heavy Equipment Parts')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                categoryFilter === 'Heavy Equipment Parts'
+                  ? 'bg-pink-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <HardHat className="w-3 h-3" />
+              Equipment
+            </button>
+            <button
+              onClick={() => setCategoryFilter('Van & Delivery Fleet')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                categoryFilter === 'Van & Delivery Fleet'
+                  ? 'bg-cyan-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Package className="w-3 h-3" />
+              Van &amp; Fleet
+            </button>
+            <button
+              onClick={() => setCategoryFilter('Universal & Workshop')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                categoryFilter === 'Universal & Workshop'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Wrench className="w-3 h-3" />
+              Universal
             </button>
           </div>
 

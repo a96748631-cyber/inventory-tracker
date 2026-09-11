@@ -1,6 +1,6 @@
 {
   "name": "Mashkay Autoparts Inventory",
-  "description": "Comprehensive inventory tracking table with automated reorder status for genuine truck, bus, and trailer parts.",
+  "description": "Commercial fleet inventory tracking system with automated reorder status, multi-category support (Trucks, Buses, Trailers, Passenger Cars, Heavy Equipment, Delivery Fleet), and real-time multi-computer network synchronization.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

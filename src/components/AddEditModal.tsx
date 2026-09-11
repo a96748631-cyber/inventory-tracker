@@ -237,6 +237,10 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
                 <option value="Truck Parts">Truck Parts</option>
                 <option value="Bus Parts">Bus Parts</option>
                 <option value="Trailer Parts">Trailer Parts</option>
+                <option value="Passenger Car Parts">Passenger Car Parts</option>
+                <option value="Heavy Equipment Parts">Heavy Equipment Parts</option>
+                <option value="Van & Delivery Fleet">Van & Delivery Fleet</option>
+                <option value="Universal & Workshop">Universal & Workshop</option>
               </select>
             </div>
           </div>

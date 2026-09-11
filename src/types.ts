@@ -1,4 +1,11 @@
-export type PartCategory = 'Truck Parts' | 'Bus Parts' | 'Trailer Parts';
+export type PartCategory =
+  | 'Truck Parts'
+  | 'Bus Parts'
+  | 'Trailer Parts'
+  | 'Passenger Car Parts'
+  | 'Heavy Equipment Parts'
+  | 'Van & Delivery Fleet'
+  | 'Universal & Workshop';
 
 export interface InventoryItem {
   id: string;

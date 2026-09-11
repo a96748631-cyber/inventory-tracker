@@ -3,6 +3,10 @@ import {
   SAMPLE_TRUCK_BRAKE_IMAGE,
   SAMPLE_BUS_DOOR_IMAGE,
   SAMPLE_TRAILER_BELLOWS_IMAGE,
+  SAMPLE_CAR_ALTERNATOR_IMAGE,
+  SAMPLE_EXCAVATOR_HYDRAULIC_IMAGE,
+  SAMPLE_VAN_TURBO_IMAGE,
+  SAMPLE_WORKSHOP_BATTERY_IMAGE,
 } from './samplePartImages';
 
 export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
@@ -50,5 +54,65 @@ export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
     lastRestockedDate: '2026-08-02',
     compatibility: 'SAF-Holland, BPW Eco Plus, Schmitz Cargobull',
     oemReference: 'OEM-CNT-1T19L7'
+  },
+  {
+    id: 'mashkay-part-004',
+    partNumber: 'MK-CAR-1044',
+    itemName: 'High-Output 12V 180A Dual-Internal Fan Alternator',
+    partDescription: 'Precision-balanced high-amperage 12V automotive alternator with multi-ribbed decoupler pulley and heavy-duty avalanche diode rectifier for passenger cars and executive fleet sedans.',
+    category: 'Passenger Car Parts',
+    imageUrl: SAMPLE_CAR_ALTERNATOR_IMAGE,
+    supplierName: 'Bosch Automotive Aftermarket',
+    unitPrice: 215.00,
+    quantityInStock: 16,
+    reorderLevel: 10,
+    lastRestockedDate: '2026-08-19',
+    compatibility: 'BMW 3/5 Series, Mercedes E-Class, Audi A6 3.0T',
+    oemReference: 'OEM-BSH-012581'
+  },
+  {
+    id: 'mashkay-part-005',
+    partNumber: 'MK-EQP-5520',
+    itemName: 'Variable Displacement Axial Piston Hydraulic Pump',
+    partDescription: 'Heavy-duty 280-bar load-sensing variable displacement hydraulic piston pump engineered for excavators, wheel loaders, and earthmoving construction machinery.',
+    category: 'Heavy Equipment Parts',
+    imageUrl: SAMPLE_EXCAVATOR_HYDRAULIC_IMAGE,
+    supplierName: 'Parker Hannifin Mobile Hydraulic Systems',
+    unitPrice: 890.00,
+    quantityInStock: 4,
+    reorderLevel: 6,
+    lastRestockedDate: '2026-07-15',
+    compatibility: 'CAT 320D, Komatsu PC200-8, Hitachi ZX210',
+    oemReference: 'OEM-PRK-PVP333'
+  },
+  {
+    id: 'mashkay-part-006',
+    partNumber: 'MK-VAN-3310',
+    itemName: 'Electronic Actuator VNT Turbocharger Assembly',
+    partDescription: 'Variable nozzle turbine (VNT) turbocharger with electronic stepper wastegate actuator optimized for 2.0L-3.0L commercial courier vans and last-mile delivery fleets.',
+    category: 'Van & Delivery Fleet',
+    imageUrl: SAMPLE_VAN_TURBO_IMAGE,
+    supplierName: 'Garrett Motion Turbocharging',
+    unitPrice: 465.00,
+    quantityInStock: 11,
+    reorderLevel: 8,
+    lastRestockedDate: '2026-08-11',
+    compatibility: 'Mercedes Sprinter 316, Ford Transit 2.0 EcoBlue, Iveco Daily',
+    oemReference: 'OEM-GAR-822182'
+  },
+  {
+    id: 'mashkay-part-007',
+    partNumber: 'MK-UNI-8805',
+    itemName: 'Commercial AGM Spiral-Cell High-Crank Battery (1000 CCA)',
+    partDescription: 'Sealed maintenance-free AGM deep-cycle battery with 1000 cold cranking amps (CCA) and extreme vibration resistance, universal across service trucks, generators, and shop equipment.',
+    category: 'Universal & Workshop',
+    imageUrl: SAMPLE_WORKSHOP_BATTERY_IMAGE,
+    supplierName: 'Exide Technologies Commercial',
+    unitPrice: 195.00,
+    quantityInStock: 22,
+    reorderLevel: 15,
+    lastRestockedDate: '2026-08-25',
+    compatibility: 'Universal 12V Heavy Commercial, Industrial Gensets, Service Vans',
+    oemReference: 'OEM-EXD-AGM31'
   }
 ];

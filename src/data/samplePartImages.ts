@@ -60,3 +60,82 @@ export const SAMPLE_TRAILER_BELLOWS_IMAGE = `data:image/svg+xml;utf8,${encodeURI
   <text x="100" y="40" fill="#f8fafc" font-size="11" font-family="monospace" font-weight="bold" text-anchor="middle">AIR SUSPENSION BELLOWS</text>
 </svg>
 `)}`;
+
+export const SAMPLE_CAR_ALTERNATOR_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="24" fill="#0f172a" />
+  <circle cx="100" cy="100" r="75" fill="#1e293b" stroke="#8b5cf6" stroke-width="4" stroke-dasharray="6 4" />
+  <!-- Alternator Aluminum Casing -->
+  <circle cx="100" cy="105" r="46" fill="#334155" stroke="#94a3b8" stroke-width="2.5" />
+  <!-- Stator Copper Windings Slots -->
+  <circle cx="100" cy="105" r="38" fill="#1e293b" stroke="#f59e0b" stroke-width="3" stroke-dasharray="5 3" />
+  <!-- Pulley & Shaft -->
+  <circle cx="100" cy="105" r="22" fill="#475569" stroke="#cbd5e1" stroke-width="3" />
+  <circle cx="100" cy="105" r="8" fill="#0f172a" />
+  <!-- Mounting Ear Brackets -->
+  <rect x="42" y="65" width="24" height="14" rx="4" fill="#64748b" />
+  <circle cx="50" cy="72" r="3" fill="#0f172a" />
+  <rect x="134" y="135" width="24" height="14" rx="4" fill="#64748b" />
+  <circle cx="150" cy="142" r="3" fill="#0f172a" />
+  <text x="100" y="38" fill="#f8fafc" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">12V 180A CAR ALTERNATOR</text>
+</svg>
+`)}`;
+
+export const SAMPLE_EXCAVATOR_HYDRAULIC_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="24" fill="#0f172a" />
+  <circle cx="100" cy="100" r="75" fill="#1e293b" stroke="#ec4899" stroke-width="4" stroke-dasharray="6 4" />
+  <!-- Heavy Pump Cast-Iron Body -->
+  <rect x="52" y="70" width="96" height="66" rx="8" fill="#334155" stroke="#94a3b8" stroke-width="2.5" />
+  <!-- High Pressure Flange Ports -->
+  <circle cx="75" cy="102" r="14" fill="#1e293b" stroke="#ec4899" stroke-width="2.5" />
+  <circle cx="75" cy="102" r="6" fill="#0f172a" />
+  <circle cx="125" cy="102" r="16" fill="#1e293b" stroke="#f59e0b" stroke-width="2.5" />
+  <circle cx="125" cy="102" r="7" fill="#0f172a" />
+  <!-- Splined Drive Shaft -->
+  <rect x="34" y="96" width="20" height="14" rx="2" fill="#cbd5e1" stroke="#475569" stroke-width="1.5" />
+  <!-- Control Valve Block Top -->
+  <rect x="70" y="52" width="60" height="20" rx="4" fill="#475569" stroke="#94a3b8" stroke-width="2" />
+  <circle cx="85" cy="62" r="3" fill="#e2e8f0" />
+  <circle cx="115" cy="62" r="3" fill="#e2e8f0" />
+  <text x="100" y="38" fill="#f8fafc" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">EXCAVATOR HYDRAULIC PUMP</text>
+</svg>
+`)}`;
+
+export const SAMPLE_VAN_TURBO_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="24" fill="#0f172a" />
+  <circle cx="100" cy="100" r="75" fill="#1e293b" stroke="#06b6d4" stroke-width="4" stroke-dasharray="6 4" />
+  <!-- Compressor Snail Housing -->
+  <circle cx="88" cy="105" r="38" fill="#334155" stroke="#38bdf8" stroke-width="2.5" />
+  <!-- Impeller Center -->
+  <circle cx="88" cy="105" r="16" fill="#1e293b" stroke="#cbd5e1" stroke-width="2" />
+  <circle cx="88" cy="105" r="5" fill="#38bdf8" />
+  <!-- Turbine Cast Housing -->
+  <path d="M110 75 Q155 75 145 125 Q135 145 110 135 Z" fill="#475569" stroke="#94a3b8" stroke-width="2" />
+  <!-- Electronic Wastegate Actuator -->
+  <rect x="120" y="55" width="28" height="22" rx="4" fill="#0f172a" stroke="#06b6d4" stroke-width="2" />
+  <line x1="134" y1="77" x2="134" y2="105" stroke="#cbd5e1" stroke-width="2" />
+  <text x="100" y="38" fill="#f8fafc" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">VNT VAN TURBOCHARGER</text>
+</svg>
+`)}`;
+
+export const SAMPLE_WORKSHOP_BATTERY_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="24" fill="#0f172a" />
+  <circle cx="100" cy="100" r="75" fill="#1e293b" stroke="#eab308" stroke-width="4" stroke-dasharray="6 4" />
+  <!-- Battery Heavy Case -->
+  <rect x="48" y="75" width="104" height="74" rx="8" fill="#1e293b" stroke="#cbd5e1" stroke-width="2.5" />
+  <!-- Lead Terminal Posts -->
+  <rect x="62" y="62" width="16" height="14" rx="3" fill="#ef4444" />
+  <text x="70" y="73" fill="#ffffff" font-size="9" font-weight="bold" text-anchor="middle">+</text>
+  <rect x="122" y="62" width="16" height="14" rx="3" fill="#3b82f6" />
+  <text x="130" y="73" fill="#ffffff" font-size="9" font-weight="bold" text-anchor="middle">-</text>
+  <!-- Handle -->
+  <path d="M75 66 Q100 48 125 66" fill="none" stroke="#eab308" stroke-width="3" stroke-linecap="round" />
+  <!-- Center Specs Badge -->
+  <rect x="60" y="94" width="80" height="24" rx="4" fill="#334155" />
+  <text x="100" y="110" fill="#facc15" font-size="9" font-family="monospace" font-weight="bold" text-anchor="middle">1000 CCA &bull; 12V AGM</text>
+  <text x="100" y="38" fill="#f8fafc" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">COMMERCIAL AGM BATTERY</text>
+</svg>
+`)}`;

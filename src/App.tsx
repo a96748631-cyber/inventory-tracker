@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { InventoryItem, ReorderStatus, computeReorderStatus } from './types';
 import { INITIAL_INVENTORY_ITEMS } from './data/initialData';
 import { Header } from './components/Header';
@@ -8,6 +8,8 @@ import { InventoryTable } from './components/InventoryTable';
 import { AddEditModal } from './components/AddEditModal';
 import { RestockModal } from './components/RestockModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { NetworkShareModal } from './components/NetworkShareModal';
+import { inventoryApi, NetworkInfo } from './api/inventoryApi';
 import { CheckCircle2, AlertTriangle, Info, Truck } from 'lucide-react';
 
 const STORAGE_KEY = 'mashkay_autoparts_inventory_v1';
@@ -19,26 +21,7 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Map to ensure new columns partDescription, imageUrl, supplierName are populated if previously undefined
-          return parsed.map((item: any) => {
-            const defaultItem = INITIAL_INVENTORY_ITEMS.find((init) => init.partNumber === item.partNumber);
-            const hasOldDummyUrl = item.imageUrl && item.imageUrl.includes('example.com');
-            return {
-              ...item,
-              partDescription:
-                item.partDescription ||
-                defaultItem?.partDescription ||
-                'Genuine heavy-duty fleet autopart certified for commercial performance.',
-              imageUrl:
-                (hasOldDummyUrl && defaultItem?.imageUrl)
-                  ? defaultItem.imageUrl
-                  : (item.imageUrl || defaultItem?.imageUrl || ''),
-              supplierName:
-                item.supplierName ||
-                defaultItem?.supplierName ||
-                'Mashkay OEM Partner',
-            };
-          });
+          return parsed;
         }
       }
     } catch (e) {
@@ -57,6 +40,89 @@ export default function App() {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [resetKey, setResetKey] = useState(0);
 
+  // Network Sync States
+  const [syncVersion, setSyncVersion] = useState<number>(1);
+  const [isSyncConnected, setIsSyncConnected] = useState<boolean>(true);
+  const [isNetworkShareOpen, setIsNetworkShareOpen] = useState<boolean>(false);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
+  const syncVersionRef = useRef<number>(1);
+
+  useEffect(() => {
+    syncVersionRef.current = syncVersion;
+  }, [syncVersion]);
+
+  // Initial load and continuous network synchronization
+  useEffect(() => {
+    let isMounted = true;
+
+    const initSync = async () => {
+      try {
+        const [invResult, netResult] = await Promise.allSettled([
+          inventoryApi.getInventory(),
+          inventoryApi.getNetworkInfo(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (invResult.status === 'fulfilled' && invResult.value) {
+          setItems(invResult.value.items);
+          setSyncVersion(invResult.value.version);
+          syncVersionRef.current = invResult.value.version;
+          setIsSyncConnected(true);
+        }
+        if (netResult.status === 'fulfilled' && netResult.value) {
+          setNetworkInfo(netResult.value);
+        }
+      } catch (err) {
+        console.warn('Backend sync unavailable, using local fallback:', err);
+      }
+    };
+
+    initSync();
+
+    // Polling interval to detect changes from other computers every 2.5s
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await inventoryApi.getStatus();
+        if (!isMounted) return;
+        setIsSyncConnected(true);
+
+        if (status.version > syncVersionRef.current) {
+          const fresh = await inventoryApi.getInventory();
+          if (!isMounted) return;
+          setItems(fresh.items);
+          setSyncVersion(fresh.version);
+          syncVersionRef.current = fresh.version;
+          showToast(`Catalog updated live from network (v${fresh.version})`, 'info');
+        }
+      } catch (err) {
+        if (isMounted) setIsSyncConnected(false);
+      }
+    }, 2500);
+
+    // Immediate sync check on tab focus
+    const handleWindowFocus = async () => {
+      try {
+        const status = await inventoryApi.getStatus();
+        if (status.version > syncVersionRef.current) {
+          const fresh = await inventoryApi.getInventory();
+          setItems(fresh.items);
+          setSyncVersion(fresh.version);
+          syncVersionRef.current = fresh.version;
+        }
+      } catch {}
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, []);
+
+  // Save to localStorage as offline cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -72,14 +138,15 @@ export default function App() {
     }, 3500);
   };
 
-  const handleUpdateStock = (id: string, delta: number) => {
+  const handleUpdateStock = async (id: string, delta: number) => {
+    // Optimistic UI update
     setItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
           const newStock = Math.max(0, item.quantityInStock + delta);
           const oldStatus = computeReorderStatus(item.quantityInStock, item.reorderLevel);
           const newStatus = computeReorderStatus(newStock, item.reorderLevel);
-          
+
           if (oldStatus !== newStatus) {
             showToast(
               `Status changed for ${item.partNumber}: now "${newStatus}" (Stock: ${newStock}, Reorder Level: ${item.reorderLevel})`,
@@ -91,23 +158,47 @@ export default function App() {
         return item;
       })
     );
+
+    // Sync with central server
+    try {
+      const res = await inventoryApi.adjustStock(id, delta);
+      setSyncVersion(res.version);
+      syncVersionRef.current = res.version;
+    } catch (err) {
+      console.warn('Failed to sync stock update to central server:', err);
+    }
   };
 
-  const handleSaveItem = (itemData: Omit<InventoryItem, 'id'>, id?: string) => {
+  const handleSaveItem = async (itemData: Omit<InventoryItem, 'id'>, id?: string) => {
     if (id) {
       // Edit existing
       setItems((prev) =>
         prev.map((item) => (item.id === id ? { ...itemData, id } : item))
       );
       showToast(`Updated part ${itemData.partNumber}`);
+      try {
+        const res = await inventoryApi.updateItem(id, itemData);
+        setSyncVersion(res.version);
+        syncVersionRef.current = res.version;
+      } catch (err) {
+        console.warn('Failed to sync item update to server:', err);
+      }
     } else {
       // Add new
+      const tempId = `part-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       const newItem: InventoryItem = {
         ...itemData,
-        id: `part-${Date.now()}`,
+        id: tempId,
       };
       setItems((prev) => [newItem, ...prev]);
       showToast(`Added part ${itemData.partNumber} to inventory`);
+      try {
+        const res = await inventoryApi.createItem(newItem);
+        setSyncVersion(res.version);
+        syncVersionRef.current = res.version;
+      } catch (err) {
+        console.warn('Failed to sync new part to server:', err);
+      }
     }
   };
 
@@ -115,11 +206,20 @@ export default function App() {
     setItemPendingDelete(item);
   };
 
-  const handleConfirmSingleDelete = () => {
+  const handleConfirmSingleDelete = async () => {
     if (!itemPendingDelete) return;
-    setItems((prev) => prev.filter((i) => i.id !== itemPendingDelete.id));
-    showToast(`Removed part ${itemPendingDelete.partNumber}`, 'info');
+    const deleted = itemPendingDelete;
     setItemPendingDelete(null);
+    setItems((prev) => prev.filter((i) => i.id !== deleted.id));
+    showToast(`Removed part ${deleted.partNumber}`, 'info');
+
+    try {
+      const res = await inventoryApi.deleteItem(deleted.id);
+      setSyncVersion(res.version);
+      syncVersionRef.current = res.version;
+    } catch (err) {
+      console.warn('Failed to sync delete to server:', err);
+    }
   };
 
   const handleDeleteBatch = (itemsToDelete: InventoryItem[]) => {
@@ -127,15 +227,24 @@ export default function App() {
     setItemsPendingBatchDelete(itemsToDelete);
   };
 
-  const handleConfirmBatchDelete = () => {
+  const handleConfirmBatchDelete = async () => {
     if (!itemsPendingBatchDelete || itemsPendingBatchDelete.length === 0) return;
-    const idsToDelete = new Set(itemsPendingBatchDelete.map((i) => i.id));
-    setItems((prev) => prev.filter((i) => !idsToDelete.has(i.id)));
-    showToast(`Removed ${itemsPendingBatchDelete.length} parts from inventory`, 'info');
+    const batch = itemsPendingBatchDelete;
+    const idsToDelete = new Set(batch.map((i) => i.id));
     setItemsPendingBatchDelete(null);
+    setItems((prev) => prev.filter((i) => !idsToDelete.has(i.id)));
+    showToast(`Removed ${batch.length} parts from inventory`, 'info');
+
+    try {
+      const res = await inventoryApi.batchDelete(batch.map((i) => i.id));
+      setSyncVersion(res.version);
+      syncVersionRef.current = res.version;
+    } catch (err) {
+      console.warn('Failed to sync batch delete to server:', err);
+    }
   };
 
-  const handleRestock = (itemId: string, addedQuantity: number, restockDate: string) => {
+  const handleRestock = async (itemId: string, addedQuantity: number, restockDate: string) => {
     setItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
@@ -150,23 +259,24 @@ export default function App() {
       })
     );
     showToast(`Restocked +${addedQuantity} units on ${restockDate}. Status re-evaluated.`);
+
+    try {
+      const res = await inventoryApi.adjustStock(itemId, addedQuantity);
+      await inventoryApi.updateItem(itemId, { lastRestockedDate: restockDate });
+      setSyncVersion(res.version + 1);
+      syncVersionRef.current = res.version + 1;
+    } catch (err) {
+      console.warn('Failed to sync restock to server:', err);
+    }
   };
 
   const handleResetData = () => {
     setIsResetConfirmOpen(true);
   };
 
-  const handleConfirmReset = () => {
-    // Deep clone to ensure completely pristine object references
+  const handleConfirmReset = async () => {
     const freshItems: InventoryItem[] = JSON.parse(JSON.stringify(INITIAL_INVENTORY_ITEMS));
     setItems(freshItems);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(freshItems));
-    } catch (e) {
-      console.warn('Failed to reset storage:', e);
-    }
-    // Clear all filters, selections, search queries, modals, and pending states
     setStatusFilter('ALL');
     setEditingItem(null);
     setRestockingItem(null);
@@ -175,17 +285,19 @@ export default function App() {
     setIsAddEditModalOpen(false);
     setIsResetConfirmOpen(false);
     setResetKey((k) => k + 1);
-    showToast('Everything cleared and reset to 3 standard sample rows');
+    showToast('Everything cleared and reset to sample catalog');
+
+    try {
+      const res = await inventoryApi.resetCatalog(false);
+      setSyncVersion(res.version);
+      syncVersionRef.current = res.version;
+    } catch (err) {
+      console.warn('Failed to sync reset to server:', err);
+    }
   };
 
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     setItems([]);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
-    } catch (e) {
-      console.warn('Failed to clear inventory in storage:', e);
-    }
     setStatusFilter('ALL');
     setEditingItem(null);
     setRestockingItem(null);
@@ -195,6 +307,14 @@ export default function App() {
     setIsResetConfirmOpen(false);
     setResetKey((k) => k + 1);
     showToast('All inventory items and filters cleared (0 items)', 'info');
+
+    try {
+      const res = await inventoryApi.resetCatalog(true);
+      setSyncVersion(res.version);
+      syncVersionRef.current = res.version;
+    } catch (err) {
+      console.warn('Failed to sync clear to server:', err);
+    }
   };
 
   const handleExportCSV = () => {
@@ -265,7 +385,10 @@ export default function App() {
         }}
         onExportCSV={handleExportCSV}
         onResetData={handleResetData}
+        onOpenNetworkShare={() => setIsNetworkShareOpen(true)}
         itemCount={items.length}
+        isSyncConnected={isSyncConnected}
+        syncVersion={syncVersion}
       />
 
       {/* Main Content */}
@@ -297,6 +420,15 @@ export default function App() {
           setStatusFilter={setStatusFilter}
         />
       </main>
+
+      {/* Network Share Modal */}
+      <NetworkShareModal
+        isOpen={isNetworkShareOpen}
+        onClose={() => setIsNetworkShareOpen(false)}
+        networkInfo={networkInfo}
+        isSyncConnected={isSyncConnected}
+        version={syncVersion}
+      />
 
       {/* Add / Edit Modal */}
       <AddEditModal
@@ -330,7 +462,7 @@ export default function App() {
         onConfirm={handleConfirmSingleDelete}
         title="Delete Autopart"
         message={`Are you sure you want to permanently delete part "${itemPendingDelete?.partNumber} - ${itemPendingDelete?.itemName}" from your inventory catalog?`}
-        subMessage="This action will remove this part and its stock history."
+        subMessage="This action will remove this part across all connected computers on your network."
         confirmText="Delete Part"
         confirmVariant="danger"
       />
@@ -346,7 +478,7 @@ export default function App() {
           partNumber: item.partNumber,
           itemName: item.itemName,
         }))}
-        subMessage="This action cannot be undone."
+        subMessage="This action will remove the selected parts across all connected computers."
         confirmText={`Delete ${itemsPendingBatchDelete?.length || 0} Parts`}
         confirmVariant="danger"
       />
@@ -358,8 +490,8 @@ export default function App() {
         onConfirm={handleConfirmReset}
         title="Reset Inventory Catalog"
         message="Are you sure you want to reset the catalog? All added parts, modifications, search queries, category filters, and checkbox selections will be completely cleared."
-        subMessage="The catalog will be cleanly restored to the 3 standard genuine fleet sample rows (Truck, Bus, and Trailer)."
-        confirmText="Reset to 3 Sample Rows"
+        subMessage="The catalog will be cleanly restored to the genuine sample fleet parts across trucks, buses, trailers, passenger cars, heavy equipment, and delivery vans."
+        confirmText="Reset Sample Catalog"
         confirmVariant="warning"
         secondaryAction={{
           label: 'Wipe All (0 Parts)',
