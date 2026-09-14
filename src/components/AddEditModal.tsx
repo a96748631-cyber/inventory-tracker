@@ -8,7 +8,27 @@ interface AddEditModalProps {
   onSave: (item: Omit<InventoryItem, 'id'>, id?: string) => void;
   initialItem?: InventoryItem | null;
   onDelete?: (id: string) => void;
+  availableCategories?: string[];
 }
+
+const DEFAULT_PRESET_CATEGORIES: string[] = [
+  'Brakes & Friction',
+  'Engine & Powertrain',
+  'Suspension & Steering',
+  'Electrical, Lighting & Starters',
+  'Filters & Fluids',
+  'Cooling & Air Conditioning',
+  'Transmission & Clutch',
+  'Exhaust & Turbochargers',
+  'Hydraulics & Pneumatics',
+  'Truck Parts',
+  'Bus Parts',
+  'Trailer Parts',
+  'Passenger Car Parts',
+  'Heavy Equipment Parts',
+  'Van & Delivery Fleet',
+  'Universal & Workshop',
+];
 
 export const AddEditModal: React.FC<AddEditModalProps> = ({
   isOpen,
@@ -16,11 +36,14 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
   onSave,
   initialItem,
   onDelete,
+  availableCategories = DEFAULT_PRESET_CATEGORIES,
 }) => {
   const [partNumber, setPartNumber] = useState('');
   const [itemName, setItemName] = useState('');
   const [partDescription, setPartDescription] = useState('');
   const [category, setCategory] = useState<PartCategory>('Truck Parts');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [unitPrice, setUnitPrice] = useState<string>('');
@@ -98,13 +121,17 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
       setLastRestockedDate(initialItem.lastRestockedDate);
       setCompatibility(initialItem.compatibility || '');
       setOemReference(initialItem.oemReference || '');
+      setIsCustomCategory(false);
+      setCustomCategoryInput('');
     } else {
       // Default new part setup
       const today = new Date().toISOString().split('T')[0];
       setPartNumber('');
       setItemName('');
       setPartDescription('');
-      setCategory('Truck Parts');
+      setCategory(availableCategories[0] || 'Truck Parts');
+      setIsCustomCategory(false);
+      setCustomCategoryInput('');
       setImageUrl('http://example.com/images/part_number.jpg');
       setSupplierName('');
       setUnitPrice('');
@@ -122,6 +149,14 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
   const currentStock = Number(quantityInStock) || 0;
   const currentReorderLevel = Number(reorderLevel) || 0;
   const calculatedStatus = computeReorderStatus(currentStock, currentReorderLevel);
+
+  const categoryOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    if (category) set.add(category);
+    availableCategories.forEach((c) => set.add(c));
+    DEFAULT_PRESET_CATEGORIES.forEach((c) => set.add(c));
+    return Array.from(set);
+  }, [availableCategories, category]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,13 +192,17 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
     const trimmedPartNumber = partNumber.trim().toUpperCase();
     const finalImageUrl =
       imageUrl.trim() || `http://example.com/images/${trimmedPartNumber}.jpg`;
+    const resolvedCategory =
+      isCustomCategory && customCategoryInput.trim()
+        ? customCategoryInput.trim()
+        : category || 'Universal & Workshop';
 
     onSave(
       {
         partNumber: trimmedPartNumber,
         itemName: itemName.trim(),
         partDescription: partDescription.trim(),
-        category,
+        category: resolvedCategory,
         imageUrl: finalImageUrl,
         supplierName: supplierName.trim() || 'Mashkay Verified Partner',
         unitPrice: priceNum,
@@ -225,23 +264,81 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
 
             {/* Category */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Category <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="modal-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as PartCategory)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
-              >
-                <option value="Truck Parts">Truck Parts</option>
-                <option value="Bus Parts">Bus Parts</option>
-                <option value="Trailer Parts">Trailer Parts</option>
-                <option value="Passenger Car Parts">Passenger Car Parts</option>
-                <option value="Heavy Equipment Parts">Heavy Equipment Parts</option>
-                <option value="Van & Delivery Fleet">Van & Delivery Fleet</option>
-                <option value="Universal & Workshop">Universal & Workshop</option>
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Category <span className="text-red-500">*</span>
+                </label>
+                {!isCustomCategory && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomCategory(true);
+                      setCustomCategoryInput('');
+                    }}
+                    className="text-[11px] text-amber-600 hover:text-amber-700 font-semibold cursor-pointer"
+                  >
+                    + New Category
+                  </button>
+                )}
+              </div>
+
+              {!isCustomCategory ? (
+                <select
+                  id="modal-category"
+                  value={category}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setIsCustomCategory(true);
+                      setCustomCategoryInput('');
+                    } else {
+                      setCategory(e.target.value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
+                >
+                  {categoryOptions.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Add Custom Category...</option>
+                </select>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="e.g. Brakes, Transmission, Filters..."
+                      value={customCategoryInput}
+                      onChange={(e) => setCustomCategoryInput(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-amber-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-amber-50/40"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customCategoryInput.trim()) {
+                          setCategory(customCategoryInput.trim());
+                        }
+                        setIsCustomCategory(false);
+                      }}
+                      className="px-2.5 py-1.5 text-xs font-bold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition-colors"
+                    >
+                      Apply
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomCategory(false)}
+                      className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Category will be saved to this part and available across your catalog
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -263,6 +360,152 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
             {errors.itemName && (
               <p className="text-xs text-red-500 mt-1">{errors.itemName}</p>
             )}
+          </div>
+
+          {/* PROMINENT PRICING & INVENTORY STOCK LEVELS */}
+          <div className="bg-gradient-to-br from-amber-50/70 via-slate-50 to-amber-50/40 border-2 border-amber-300/80 rounded-xl p-4 shadow-xs space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs shadow-2xs">
+                  $
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Pricing &amp; Inventory Quantities
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Set unit selling price and warehouse threshold limits
+                  </p>
+                </div>
+              </div>
+              
+              {/* Live Inventory Valuation Subtotal */}
+              <div className="text-right">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Batch Valuation
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-700">
+                  ${((parseFloat(unitPrice) || 0) * (parseInt(quantityInStock) || 0)).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              {/* 1. Unit Price ($) */}
+              <div className="bg-white p-2.5 rounded-lg border-2 border-amber-300 shadow-2xs">
+                <label className="block text-xs font-bold text-slate-900 mb-1 flex items-center justify-between">
+                  <span>Unit Price ($)</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-amber-600 font-bold text-sm">
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    id="modal-unit-price"
+                    placeholder="0.00"
+                    value={unitPrice}
+                    onChange={(e) => setUnitPrice(e.target.value)}
+                    className={`w-full pl-6 pr-2 py-1.5 text-sm font-mono font-bold rounded-md border ${
+                      errors.unitPrice
+                        ? 'border-red-500 focus:ring-red-400'
+                        : 'border-slate-300 focus:border-amber-500 focus:ring-amber-500'
+                    } focus:outline-hidden focus:ring-2 bg-white text-slate-900`}
+                  />
+                </div>
+                {errors.unitPrice && (
+                  <p className="text-xs text-red-500 mt-1">{errors.unitPrice}</p>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  Selling price per unit
+                </p>
+              </div>
+
+              {/* 2. Quantity in Stock */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                <label className="block text-xs font-bold text-slate-900 mb-1 flex items-center justify-between">
+                  <span>Quantity in Stock</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  id="modal-quantity"
+                  placeholder="0"
+                  value={quantityInStock}
+                  onChange={(e) => setQuantityInStock(e.target.value)}
+                  className={`w-full px-2 py-1.5 text-sm font-mono font-bold rounded-md border ${
+                    errors.quantityInStock
+                      ? 'border-red-500 focus:ring-red-400'
+                      : 'border-slate-300 focus:border-amber-500 focus:ring-amber-500'
+                  } focus:outline-hidden focus:ring-2 bg-white text-slate-900`}
+                />
+                {errors.quantityInStock && (
+                  <p className="text-xs text-red-500 mt-1">{errors.quantityInStock}</p>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  Physical count in warehouse
+                </p>
+              </div>
+
+              {/* 3. Reorder Level */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                <label className="block text-xs font-bold text-slate-900 mb-1 flex items-center justify-between">
+                  <span>Reorder Level</span>
+                  <span className="text-red-500 font-bold">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  id="modal-reorder-level"
+                  placeholder="0"
+                  value={reorderLevel}
+                  onChange={(e) => setReorderLevel(e.target.value)}
+                  className={`w-full px-2 py-1.5 text-sm font-mono font-bold rounded-md border ${
+                    errors.reorderLevel
+                      ? 'border-red-500 focus:ring-red-400'
+                      : 'border-slate-300 focus:border-amber-500 focus:ring-amber-500'
+                  } focus:outline-hidden focus:ring-2 bg-white text-slate-900`}
+                />
+                {errors.reorderLevel && (
+                  <p className="text-xs text-red-500 mt-1">{errors.reorderLevel}</p>
+                )}
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  Triggers reorder alert if below
+                </p>
+              </div>
+            </div>
+
+            {/* Live IF Formula Status Calculation Preview */}
+            <div className="bg-white/80 rounded-lg p-2.5 border border-amber-200/80 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">
+                  Live Status Evaluation (Excel IF Formula)
+                </p>
+                <p className="text-[11px] font-mono text-slate-500 mt-0.5">
+                  IF({currentStock} &lt; {currentReorderLevel}, "Reorder", "OK")
+                </p>
+              </div>
+              <div>
+                {calculatedStatus === 'Reorder' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    Reorder Required
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    <Check className="w-3.5 h-3.5" />
+                    Stock OK
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Part Description */}
@@ -386,92 +629,6 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Price & Quantities */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Unit Price ($) <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-sm">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  id="modal-unit-price"
-                  placeholder="0.00"
-                  value={unitPrice}
-                  onChange={(e) => setUnitPrice(e.target.value)}
-                  className="w-full pl-7 pr-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-              {errors.unitPrice && (
-                <p className="text-xs text-red-500 mt-1">{errors.unitPrice}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Quantity in Stock <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                id="modal-quantity"
-                value={quantityInStock}
-                onChange={(e) => setQuantityInStock(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-              />
-              {errors.quantityInStock && (
-                <p className="text-xs text-red-500 mt-1">{errors.quantityInStock}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Reorder Level <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                id="modal-reorder-level"
-                value={reorderLevel}
-                onChange={(e) => setReorderLevel(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-              />
-              {errors.reorderLevel && (
-                <p className="text-xs text-red-500 mt-1">{errors.reorderLevel}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Live IF Formula Status Calculation Preview */}
-          <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-600">
-                  Calculated Reorder Status (Formula Result)
-                </p>
-                <p className="text-[11px] font-mono text-slate-500 mt-0.5">
-                  IF({currentStock} &lt; {currentReorderLevel}, "Reorder", "OK")
-                </p>
-              </div>
-              <div>
-                {calculatedStatus === 'Reorder' ? (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    Reorder
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                    <Check className="w-3.5 h-3.5" />
-                    OK
-                  </span>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Last Restocked Date */}

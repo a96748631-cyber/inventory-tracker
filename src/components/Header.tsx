@@ -1,11 +1,26 @@
 import React from 'react';
-import { Truck, Plus, Download, RotateCcw, ShieldCheck, Wifi, Users } from 'lucide-react';
+import {
+  Truck,
+  Plus,
+  Download,
+  Upload,
+  RotateCcw,
+  ShieldCheck,
+  Wifi,
+  Users,
+  TrendingUp,
+  ShoppingCart,
+} from 'lucide-react';
 
 interface HeaderProps {
   onAddPart: () => void;
   onExportCSV: () => void;
+  onImportCSV: () => void;
   onResetData: () => void;
   onOpenNetworkShare: () => void;
+  onOpenSalesReport: () => void;
+  onOpenRecordSale: () => void;
+  salesCount: number;
   itemCount: number;
   isSyncConnected: boolean;
   syncVersion: number;
@@ -14,8 +29,12 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onAddPart,
   onExportCSV,
+  onImportCSV,
   onResetData,
   onOpenNetworkShare,
+  onOpenSalesReport,
+  onOpenRecordSale,
+  salesCount,
   isSyncConnected,
   syncVersion,
 }) => {
@@ -69,6 +88,33 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Sales Report Button */}
+            <button
+              id="sales-report-btn"
+              onClick={onOpenSalesReport}
+              title="View POS sales report, revenue analytics, and transaction log"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 shadow-xs transition-colors cursor-pointer"
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-amber-400 stroke-[2.5]" />
+              <span>Sales Report</span>
+              {salesCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-950 font-black">
+                  {salesCount}
+                </span>
+              )}
+            </button>
+
+            {/* Quick Record Sale Button */}
+            <button
+              id="record-sale-btn"
+              onClick={onOpenRecordSale}
+              title="Record a sale and instantly deduct stock from inventory"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors cursor-pointer"
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              <span>Record Sale</span>
+            </button>
+
             <button
               id="share-network-btn"
               onClick={onOpenNetworkShare}
@@ -87,6 +133,16 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset Sample Rows</span>
+            </button>
+
+            <button
+              id="import-csv-btn"
+              onClick={onImportCSV}
+              title="Import inventory parts from CSV or QuickBooks file"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition-colors cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span>Import CSV</span>
             </button>
 
             <button

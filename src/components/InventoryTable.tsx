@@ -26,15 +26,22 @@ import {
   HardHat,
   Package,
   Wrench,
+  Tag,
+  Filter,
+  ShoppingCart,
+  Pencil,
+  Check,
 } from 'lucide-react';
 
 interface InventoryTableProps {
   items: InventoryItem[];
   onUpdateStock: (id: string, delta: number) => void;
+  onUpdatePrice?: (id: string, newPrice: number) => void;
   onEditItem: (item: InventoryItem) => void;
   onDeleteItem: (item: InventoryItem) => void;
   onDeleteBatch?: (items: InventoryItem[]) => void;
   onRestockClick: (item: InventoryItem) => void;
+  onRecordSaleClick?: (item: InventoryItem) => void;
   statusFilter: 'ALL' | ReorderStatus;
   setStatusFilter: (status: 'ALL' | ReorderStatus) => void;
   resetKey?: number;
@@ -56,20 +63,94 @@ type SortField =
 export const InventoryTable: React.FC<InventoryTableProps> = ({
   items,
   onUpdateStock,
+  onUpdatePrice,
   onEditItem,
   onDeleteItem,
   onDeleteBatch,
   onRestockClick,
+  onRecordSaleClick,
   statusFilter,
   setStatusFilter,
   resetKey,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'ALL' | PartCategory>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | string>('ALL');
   const [sortField, setSortField] = useState<SortField>('partNumber');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [previewImageItem, setPreviewImageItem] = useState<InventoryItem | null>(null);
+
+  // Quick inline price editing state
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editingPriceValue, setEditingPriceValue] = useState<string>('');
+
+  const startEditingPrice = (item: InventoryItem) => {
+    setEditingPriceId(item.id);
+    setEditingPriceValue(item.unitPrice.toString());
+  };
+
+  const handleSaveInlinePrice = (id: string) => {
+    const parsed = parseFloat(editingPriceValue);
+    if (!isNaN(parsed) && parsed >= 0) {
+      onUpdatePrice?.(id, parsed);
+    }
+    setEditingPriceId(null);
+    setEditingPriceValue('');
+  };
+
+  const cancelInlinePrice = () => {
+    setEditingPriceId(null);
+    setEditingPriceValue('');
+  };
+
+  // Dynamic categories from all inventory items (including any imported from CSV) plus presets
+  const availableCategories = useMemo(() => {
+    const activeCats = new Set<string>();
+    items.forEach((item) => {
+      if (item.category && item.category.trim()) {
+        activeCats.add(item.category.trim());
+      }
+    });
+
+    const presets = [
+      'Brakes & Friction',
+      'Engine & Powertrain',
+      'Suspension & Steering',
+      'Electrical, Lighting & Starters',
+      'Filters & Fluids',
+      'Cooling & Air Conditioning',
+      'Transmission & Clutch',
+      'Exhaust & Turbochargers',
+      'Hydraulics & Pneumatics',
+      'Truck Parts',
+      'Bus Parts',
+      'Trailer Parts',
+      'Passenger Car Parts',
+      'Heavy Equipment Parts',
+      'Van & Delivery Fleet',
+      'Universal & Workshop',
+    ];
+
+    // Put categories that currently have parts in the catalog first (sorted by part count desc)
+    const sortedActive = Array.from(activeCats).sort((a, b) => {
+      const countA = items.filter((i) => i.category === a).length;
+      const countB = items.filter((i) => i.category === b).length;
+      return countB - countA;
+    });
+
+    const inactivePresets = presets.filter((p) => !activeCats.has(p)).sort();
+
+    return [...sortedActive, ...inactivePresets];
+  }, [items]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    items.forEach((item) => {
+      const cat = item.category || 'Universal & Workshop';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [items]);
 
   // When resetKey changes (e.g. from clicking Reset 3 Sample Rows), clear all search and filter states
   useEffect(() => {
@@ -171,25 +252,33 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
       });
   }, [items, searchQuery, categoryFilter, statusFilter, sortField, sortDirection]);
 
-  const getCategoryIcon = (category: PartCategory) => {
-    switch (category) {
-      case 'Truck Parts':
-        return <Truck className="w-3.5 h-3.5 text-blue-500" />;
-      case 'Bus Parts':
-        return <Bus className="w-3.5 h-3.5 text-amber-500" />;
-      case 'Trailer Parts':
-        return <Container className="w-3.5 h-3.5 text-emerald-500" />;
-      case 'Passenger Car Parts':
-        return <Car className="w-3.5 h-3.5 text-purple-500" />;
-      case 'Heavy Equipment Parts':
-        return <HardHat className="w-3.5 h-3.5 text-pink-500" />;
-      case 'Van & Delivery Fleet':
-        return <Package className="w-3.5 h-3.5 text-cyan-500" />;
-      case 'Universal & Workshop':
-        return <Wrench className="w-3.5 h-3.5 text-yellow-500" />;
-      default:
-        return <Layers className="w-3.5 h-3.5 text-slate-500" />;
+  const getCategoryIcon = (category: string) => {
+    const clean = (category || '').toLowerCase();
+    if (clean.includes('truck') || clean.includes('semi') || clean.includes('lorry')) {
+      return <Truck className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
     }
+    if (clean.includes('bus') || clean.includes('coach')) {
+      return <Bus className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
+    }
+    if (clean.includes('trailer') || clean.includes('semi-trailer')) {
+      return <Container className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
+    }
+    if (clean.includes('car') || clean.includes('auto') || clean.includes('sedan') || clean.includes('suv')) {
+      return <Car className="w-3.5 h-3.5 text-purple-500 shrink-0" />;
+    }
+    if (clean.includes('heavy') || clean.includes('equipment') || clean.includes('excavator') || clean.includes('plant')) {
+      return <HardHat className="w-3.5 h-3.5 text-pink-500 shrink-0" />;
+    }
+    if (clean.includes('van') || clean.includes('fleet') || clean.includes('delivery')) {
+      return <Package className="w-3.5 h-3.5 text-cyan-500 shrink-0" />;
+    }
+    if (clean.includes('brake') || clean.includes('workshop') || clean.includes('tool') || clean.includes('hardware')) {
+      return <Wrench className="w-3.5 h-3.5 text-yellow-600 shrink-0" />;
+    }
+    if (clean.includes('engine') || clean.includes('filter') || clean.includes('suspension')) {
+      return <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
+    }
+    return <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
   };
 
   const renderSortIndicator = (field: SortField) => {
@@ -231,8 +320,31 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Category Filter */}
-          <div className="flex items-center rounded-xl bg-white border border-slate-200 p-1 shadow-2xs text-xs">
+          {/* Category Filter Group (Supports All CSV and Custom Categories) */}
+          <div className="flex flex-wrap items-center rounded-xl bg-white border border-slate-200 p-1 shadow-2xs text-xs gap-1">
+            {/* All Categories Dropdown */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 border-r border-slate-200">
+              <Filter className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <select
+                id="table-category-select"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="bg-transparent font-semibold text-slate-800 text-xs py-1 focus:outline-hidden cursor-pointer max-w-[150px] sm:max-w-[180px] truncate"
+                title="Filter by any category from your inventory catalog or CSV"
+              >
+                <option value="ALL">All Categories ({items.length})</option>
+                {availableCategories.map((cat) => {
+                  const count = categoryCounts[cat] || 0;
+                  return (
+                    <option key={cat} value={cat}>
+                      {cat} {count > 0 ? `(${count})` : '(0)'}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Quick Filter Pill: All */}
             <button
               onClick={() => setCategoryFilter('ALL')}
               className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
@@ -241,85 +353,57 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              All Types
+              All
             </button>
-            <button
-              onClick={() => setCategoryFilter('Truck Parts')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                categoryFilter === 'Truck Parts'
-                  ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Truck className="w-3 h-3" />
-              Truck
-            </button>
-            <button
-              onClick={() => setCategoryFilter('Bus Parts')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                categoryFilter === 'Bus Parts'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Bus className="w-3 h-3" />
-              Bus
-            </button>
-            <button
-              onClick={() => setCategoryFilter('Trailer Parts')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                categoryFilter === 'Trailer Parts'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Container className="w-3 h-3" />
-              Trailer
-            </button>
-            <button
-              onClick={() => setCategoryFilter('Passenger Car Parts')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                categoryFilter === 'Passenger Car Parts'
-                  ? 'bg-purple-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Car className="w-3 h-3" />
-              Car
-            </button>
-            <button
-              onClick={() => setCategoryFilter('Heavy Equipment Parts')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                categoryFilter === 'Heavy Equipment Parts'
-                  ? 'bg-pink-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <HardHat className="w-3 h-3" />
-              Equipment
-            </button>
-            <button
-              onClick={() => setCategoryFilter('Van & Delivery Fleet')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                categoryFilter === 'Van & Delivery Fleet'
-                  ? 'bg-cyan-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Package className="w-3 h-3" />
-              Van &amp; Fleet
-            </button>
-            <button
-              onClick={() => setCategoryFilter('Universal & Workshop')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                categoryFilter === 'Universal & Workshop'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Wrench className="w-3 h-3" />
-              Universal
-            </button>
+
+            {/* Quick Filter Pills for Top/Active Categories (including CSV categories) */}
+            {availableCategories
+              .filter((cat) => (categoryCounts[cat] || 0) > 0 || cat === categoryFilter)
+              .slice(0, 6)
+              .map((cat) => {
+                const isSelected = categoryFilter === cat;
+                const count = categoryCounts[cat] || 0;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(isSelected ? 'ALL' : cat)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    {getCategoryIcon(cat)}
+                    <span className="truncate max-w-[110px]">{cat}</span>
+                    <span
+                      className={`text-[10px] px-1 rounded-full font-mono ${
+                        isSelected ? 'bg-amber-600 text-slate-950 font-extrabold' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+
+            {/* If user selected a category not in the top 6, render its active pill */}
+            {categoryFilter !== 'ALL' &&
+              !availableCategories
+                .filter((cat) => (categoryCounts[cat] || 0) > 0 || cat === categoryFilter)
+                .slice(0, 6)
+                .includes(categoryFilter) && (
+                <button
+                  onClick={() => setCategoryFilter('ALL')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-colors whitespace-nowrap bg-amber-500 text-slate-950 shadow-2xs cursor-pointer"
+                >
+                  {getCategoryIcon(categoryFilter)}
+                  <span className="truncate max-w-[120px]">{categoryFilter}</span>
+                  <span className="text-[10px] px-1 rounded-full bg-amber-600 text-slate-950 font-mono">
+                    {categoryCounts[categoryFilter] || 0}
+                  </span>
+                  <X className="w-3 h-3 ml-0.5" />
+                </button>
+              )}
           </div>
 
           {/* Status Filter */}
@@ -514,9 +598,13 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               <th
                 onClick={() => handleSort('unitPrice')}
                 className="py-3 px-3 cursor-pointer hover:bg-slate-200/60 select-none group transition-colors text-right"
+                title="Click column to sort. Click any unit price in the table to edit directly."
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  <span>Unit Price</span>
+                  <span className="text-slate-900">Unit Price ($)</span>
+                  <span className="text-[10px] text-amber-600 font-normal hidden xl:inline group-hover:underline">
+                    (click to edit)
+                  </span>
                   {renderSortIndicator('unitPrice')}
                 </div>
               </th>
@@ -739,9 +827,55 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                       </div>
                     </td>
 
-                    {/* 7. Unit Price */}
-                    <td className="py-3 px-3 font-mono font-semibold text-slate-900 text-right whitespace-nowrap">
-                      ${item.unitPrice.toFixed(2)}
+                    {/* 7. Unit Price (with inline editing!) */}
+                    <td className="py-3 px-3 text-right whitespace-nowrap">
+                      {editingPriceId === item.id ? (
+                        <div
+                          className="inline-flex items-center justify-end gap-1 bg-amber-50/90 p-1 rounded-lg border border-amber-300 shadow-2xs"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-amber-700 font-mono font-bold text-xs">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editingPriceValue}
+                            onChange={(e) => setEditingPriceValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveInlinePrice(item.id);
+                              if (e.key === 'Escape') cancelInlinePrice();
+                            }}
+                            className="w-20 px-1.5 py-0.5 text-xs font-mono font-bold border border-amber-400 rounded bg-white text-slate-900 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveInlinePrice(item.id)}
+                            title="Save price (Enter)"
+                            className="p-1 text-emerald-700 hover:bg-emerald-100 rounded cursor-pointer transition-colors"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelInlinePrice}
+                            title="Cancel (Esc)"
+                            className="p-1 text-slate-500 hover:bg-slate-200 rounded cursor-pointer transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEditingPrice(item)}
+                          title="Click to edit unit selling price"
+                          className="inline-flex items-center justify-end gap-1.5 px-2 py-1 -mr-1.5 rounded-md hover:bg-amber-100/70 text-slate-900 hover:text-amber-950 border border-transparent hover:border-amber-300/80 transition-all cursor-pointer group/price font-mono font-semibold text-xs sm:text-sm"
+                        >
+                          <span>${item.unitPrice.toFixed(2)}</span>
+                          <Pencil className="w-3 h-3 text-slate-400 group-hover/price:text-amber-600 opacity-40 group-hover/price:opacity-100 transition-opacity" />
+                        </button>
+                      )}
                     </td>
 
                     {/* 8. Quantity in Stock (with interactive stepper) */}
@@ -805,11 +939,19 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     {/* 12. Actions */}
                     <td className="py-3 px-3 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 justify-end">
+                        <button
+                          onClick={() => onRecordSaleClick?.(item)}
+                          title="Record sale & deduct stock for this part"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors cursor-pointer"
+                        >
+                          <ShoppingCart className="w-3 h-3" />
+                          <span className="hidden xl:inline">Sell</span>
+                        </button>
                         {isReorder && (
                           <button
                             onClick={() => onRestockClick(item)}
                             title="Restock shipment"
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors cursor-pointer"
                           >
                             <Truck className="w-3 h-3" />
                             <span>Restock</span>

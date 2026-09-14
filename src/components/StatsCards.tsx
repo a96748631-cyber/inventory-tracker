@@ -1,17 +1,23 @@
 import React from 'react';
 import { InventoryItem, computeReorderStatus } from '../types';
-import { Package, AlertTriangle, CheckCircle2, DollarSign } from 'lucide-react';
+import { Package, AlertTriangle, CheckCircle2, DollarSign, TrendingUp } from 'lucide-react';
 
 interface StatsCardsProps {
   items: InventoryItem[];
   onFilterByStatus?: (status: 'ALL' | 'Reorder' | 'OK') => void;
   currentStatusFilter?: 'ALL' | 'Reorder' | 'OK';
+  totalSalesRevenue?: number;
+  salesCount?: number;
+  onOpenSalesReport?: () => void;
 }
 
 export const StatsCards: React.FC<StatsCardsProps> = ({
   items,
   onFilterByStatus,
   currentStatusFilter = 'ALL',
+  totalSalesRevenue = 0,
+  salesCount = 0,
+  onOpenSalesReport,
 }) => {
   const totalSKUs = items.length;
   
@@ -32,16 +38,16 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
   );
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-6">
       {/* Total SKUs */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex items-start justify-between">
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Total Parts Catalog
+            Parts Catalog
           </p>
           <p className="text-2xl font-bold text-slate-900 mt-1">{totalSKUs}</p>
           <p className="text-xs text-slate-500 mt-0.5">
-            {totalUnits.toLocaleString()} physical units in warehouse
+            {totalUnits.toLocaleString()} units on hand
           </p>
         </div>
         <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
@@ -66,7 +72,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             </p>
             {reorderCount > 0 && (
               <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-red-100 text-red-700">
-                Action Req.
+                Low Stock
               </span>
             )}
           </div>
@@ -74,7 +80,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             {reorderCount}
           </p>
           <p className="text-xs text-slate-500 mt-0.5">
-            Stock below minimum threshold
+            Below safety threshold
           </p>
         </div>
         <div className={`p-2.5 rounded-lg border ${
@@ -110,20 +116,47 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
         </div>
       </div>
 
+      {/* Total Sales Revenue (New Card!) */}
+      <div 
+        id="stat-sales-card"
+        onClick={() => onOpenSalesReport?.()}
+        className="bg-white rounded-xl border border-slate-200 hover:border-amber-400 p-4 shadow-sm flex items-start justify-between cursor-pointer transition-all hover:shadow-md group"
+      >
+        <div>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider group-hover:text-amber-700">
+              Sales Revenue
+            </p>
+            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+              Report &rarr;
+            </span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">
+            ${totalSalesRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {salesCount} sales &bull; View report
+          </p>
+        </div>
+        <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 group-hover:bg-amber-100 transition-colors">
+          <TrendingUp className="w-5 h-5" />
+        </div>
+      </div>
+
       {/* Inventory Valuation */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex items-start justify-between">
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Inventory Valuation
+            Stock Valuation
           </p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
+          <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">
             ${totalValuation.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <p className="text-xs text-slate-500 mt-0.5">
-            Unit Price &times; Quantity in Stock
+            Unit Price &times; In Stock
           </p>
         </div>
-        <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-100">
+        <div className="p-2.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200">
           <DollarSign className="w-5 h-5" />
         </div>
       </div>

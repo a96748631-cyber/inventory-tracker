@@ -27,16 +27,8 @@
         },
         "category": {
           "type": "string",
-          "description": "Vehicle and machinery category",
-          "enum": [
-            "Truck Parts",
-            "Bus Parts",
-            "Trailer Parts",
-            "Passenger Car Parts",
-            "Heavy Equipment Parts",
-            "Van & Delivery Fleet",
-            "Universal & Workshop"
-          ]
+          "description": "Vehicle, machinery, or custom auto parts category",
+          "maxLength": 128
         },
         "imageUrl": {
           "type": "string",
@@ -85,12 +77,87 @@
         "quantityInStock",
         "reorderLevel"
       ]
+    },
+    "SaleRecord": {
+      "title": "SaleRecord",
+      "description": "Log of point-of-sale item sold transaction",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique transaction record identifier",
+          "maxLength": 128
+        },
+        "partNumber": {
+          "type": "string",
+          "description": "Part number sold",
+          "maxLength": 128
+        },
+        "itemName": {
+          "type": "string",
+          "description": "Part name",
+          "maxLength": 256
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of part",
+          "maxLength": 128
+        },
+        "quantitySold": {
+          "type": "number",
+          "description": "Number of units sold"
+        },
+        "salePrice": {
+          "type": "number",
+          "description": "Price per unit at sale time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total sale value"
+        },
+        "saleDate": {
+          "type": "string",
+          "description": "Date or timestamp of transaction",
+          "maxLength": 64
+        },
+        "receiptNumber": {
+          "type": "string",
+          "description": "POS receipt or invoice identifier",
+          "maxLength": 128
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer or fleet account name",
+          "maxLength": 256
+        },
+        "stockBefore": {
+          "type": "number",
+          "description": "Stock count before this sale"
+        },
+        "stockAfter": {
+          "type": "number",
+          "description": "Stock count after this sale"
+        }
+      },
+      "required": [
+        "id",
+        "partNumber",
+        "itemName",
+        "quantitySold",
+        "salePrice",
+        "totalAmount",
+        "saleDate"
+      ]
     }
   },
   "firestore": {
     "/inventory_parts/{partId}": {
       "schema": "InventoryPart",
       "description": "Global commercial fleet inventory parts collection accessible by team"
+    },
+    "/sales_records/{saleId}": {
+      "schema": "SaleRecord",
+      "description": "Historical sales transactions recorded from POS or tablet"
     }
   }
 }

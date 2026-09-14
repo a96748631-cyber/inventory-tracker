@@ -1,6 +1,6 @@
 {
   "name": "Mashkay Autoparts Inventory",
-  "description": "Commercial fleet inventory tracking system with automated reorder status, multi-category support (Trucks, Buses, Trailers, Passenger Cars, Heavy Equipment, Delivery Fleet), and real-time multi-computer network synchronization.",
+  "description": "Commercial fleet inventory tracking system with price management, automated reorder status, POS sales recording with automatic stock deduction, CSV sales batch import, and comprehensive sales reporting.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

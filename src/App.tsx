@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { InventoryItem, ReorderStatus, computeReorderStatus } from './types';
+import { InventoryItem, ReorderStatus, computeReorderStatus, SaleRecord } from './types';
 import { INITIAL_INVENTORY_ITEMS } from './data/initialData';
 import { Header } from './components/Header';
 import { StatsCards } from './components/StatsCards';
@@ -9,6 +9,10 @@ import { AddEditModal } from './components/AddEditModal';
 import { RestockModal } from './components/RestockModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { NetworkShareModal } from './components/NetworkShareModal';
+import { ImportCsvModal } from './components/ImportCsvModal';
+import { RecordSaleModal } from './components/RecordSaleModal';
+import { ImportSalesModal } from './components/ImportSalesModal';
+import { SalesReportModal } from './components/SalesReportModal';
 import { inventoryApi, NetworkInfo } from './api/inventoryApi';
 import { firestoreService } from './api/firestoreService';
 import { testFirestoreConnection } from './firebase';
@@ -40,7 +44,15 @@ export default function App() {
   const [itemPendingDelete, setItemPendingDelete] = useState<InventoryItem | null>(null);
   const [itemsPendingBatchDelete, setItemsPendingBatchDelete] = useState<InventoryItem[] | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isImportCsvOpen, setIsImportCsvOpen] = useState(false);
   const [resetKey, setResetKey] = useState(0);
+
+  // Sales & POS States
+  const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [isRecordSaleOpen, setIsRecordSaleOpen] = useState(false);
+  const [recordSaleTargetItem, setRecordSaleTargetItem] = useState<InventoryItem | null>(null);
+  const [isImportSalesOpen, setIsImportSalesOpen] = useState(false);
+  const [isSalesReportOpen, setIsSalesReportOpen] = useState(false);
 
   // Network Sync States
   const [syncVersion, setSyncVersion] = useState<number>(1);
@@ -69,7 +81,7 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // 3. Real-time live synchronization via Firestore onSnapshot
+    // 3. Real-time live synchronization of inventory parts via Firestore onSnapshot
     const unsubscribe = firestoreService.subscribeToParts(
       (cloudItems) => {
         if (!isMounted) return;
@@ -83,9 +95,21 @@ export default function App() {
       }
     );
 
+    // 4. Real-time live synchronization of sales records via Firestore onSnapshot
+    const unsubSales = firestoreService.subscribeToSales(
+      (cloudSales) => {
+        if (!isMounted) return;
+        setSales(cloudSales);
+      },
+      (error) => {
+        console.warn('Firestore sales subscription fallback:', error);
+      }
+    );
+
     return () => {
       isMounted = false;
       unsubscribe();
+      unsubSales();
     };
   }, []);
 
@@ -133,6 +157,24 @@ export default function App() {
 
     // Also notify local server
     inventoryApi.adjustStock(id, delta).catch(() => {});
+  };
+
+  const handleUpdatePrice = async (id: string, newPrice: number) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const safePrice = Math.max(0, Number(newPrice.toFixed(2)));
+    const updated = { ...item, unitPrice: safePrice };
+
+    // Optimistic UI update
+    setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
+    showToast(`Updated price for ${item.partNumber} to $${safePrice.toFixed(2)}`);
+
+    try {
+      await firestoreService.updatePart(id, updated);
+    } catch (err) {
+      console.warn('Firestore price update error:', err);
+    }
+    inventoryApi.updateItem(id, { unitPrice: safePrice }).catch(() => {});
   };
 
   const handleSaveItem = async (itemData: Omit<InventoryItem, 'id'>, id?: string) => {
@@ -320,6 +362,148 @@ export default function App() {
     showToast('Exported inventory tracking table to CSV');
   };
 
+  const handleImportCSV = async (importedItems: InventoryItem[], replaceAll: boolean) => {
+    let finalItems: InventoryItem[];
+
+    if (replaceAll) {
+      finalItems = importedItems;
+    } else {
+      const existingMap = new Map<string, InventoryItem>();
+      items.forEach((item) => {
+        existingMap.set(item.partNumber.toLowerCase(), item);
+      });
+
+      importedItems.forEach((newItem) => {
+        const key = newItem.partNumber.toLowerCase();
+        if (existingMap.has(key)) {
+          const old = existingMap.get(key)!;
+          existingMap.set(key, {
+            ...old,
+            itemName: newItem.itemName || old.itemName,
+            partDescription: newItem.partDescription || old.partDescription,
+            category: newItem.category || old.category,
+            unitPrice: newItem.unitPrice > 0 ? newItem.unitPrice : old.unitPrice,
+            quantityInStock: newItem.quantityInStock,
+            reorderLevel: newItem.reorderLevel > 0 ? newItem.reorderLevel : old.reorderLevel,
+            supplierName:
+              newItem.supplierName && newItem.supplierName !== 'Standard Fleet Supplier'
+                ? newItem.supplierName
+                : old.supplierName,
+            lastRestockedDate: newItem.lastRestockedDate || old.lastRestockedDate,
+          });
+        } else {
+          existingMap.set(key, newItem);
+        }
+      });
+      finalItems = Array.from(existingMap.values());
+    }
+
+    setItems(finalItems);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(finalItems));
+    } catch (e) {
+      console.warn('LocalStorage save failed:', e);
+    }
+
+    showToast(
+      replaceAll
+        ? `Replaced catalog with ${importedItems.length} imported parts!`
+        : `Successfully imported & synced ${importedItems.length} parts!`
+    );
+
+    try {
+      await firestoreService.batchImportParts(finalItems, replaceAll);
+    } catch (err) {
+      console.warn('Firestore CSV batch import warning:', err);
+    }
+  };
+
+  // Sales Action Handlers
+  const handleRecordSale = async (
+    saleData: Omit<SaleRecord, 'id'>,
+    partId: string,
+    newStock: number
+  ) => {
+    const saleId = `sale-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const fullSale: SaleRecord = {
+      ...saleData,
+      id: saleId,
+    };
+
+    // Optimistic UI updates
+    setSales((prev) => [fullSale, ...prev]);
+    setItems((prev) =>
+      prev.map((i) => (i.id === partId ? { ...i, quantityInStock: Math.max(0, newStock) } : i))
+    );
+
+    showToast(
+      `Sold ${saleData.quantitySold}x ${saleData.partNumber} ($${saleData.totalAmount.toFixed(2)}). Stock updated.`
+    );
+
+    try {
+      await firestoreService.recordSale(fullSale, partId, newStock);
+    } catch (err) {
+      console.warn('Firestore record sale error:', err);
+    }
+  };
+
+  const handleImportSales = async (
+    importedSales: SaleRecord[],
+    stockUpdates: { id: string; newStock: number }[]
+  ) => {
+    // Optimistic UI updates
+    setSales((prev) => [...importedSales, ...prev]);
+    if (stockUpdates.length > 0) {
+      const stockMap = new Map(stockUpdates.map((u) => [u.id, u.newStock]));
+      setItems((prev) =>
+        prev.map((item) =>
+          stockMap.has(item.id)
+            ? { ...item, quantityInStock: Math.max(0, stockMap.get(item.id)!) }
+            : item
+        )
+      );
+    }
+
+    showToast(`Successfully imported ${importedSales.length} sales and updated inventory stock!`);
+
+    try {
+      await firestoreService.batchRecordSales(importedSales, stockUpdates);
+    } catch (err) {
+      console.warn('Firestore batch sales import error:', err);
+    }
+  };
+
+  const handleDeleteSale = async (
+    saleId: string,
+    partNumber: string,
+    quantityToRestore: number
+  ) => {
+    const targetPart = items.find(
+      (i) => i.partNumber.toLowerCase() === partNumber.toLowerCase()
+    );
+
+    // Optimistic UI update
+    setSales((prev) => prev.filter((s) => s.id !== saleId));
+    if (targetPart && quantityToRestore > 0) {
+      const restoredStock = targetPart.quantityInStock + quantityToRestore;
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === targetPart.id ? { ...i, quantityInStock: restoredStock } : i
+        )
+      );
+    }
+
+    showToast(`Voided sale for ${partNumber}: restored +${quantityToRestore} to stock`, 'info');
+
+    try {
+      await firestoreService.deleteSale(saleId, targetPart?.id, quantityToRestore);
+    } catch (err) {
+      console.warn('Firestore delete sale error:', err);
+    }
+  };
+
+  const totalSalesRevenue = sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans">
       {/* Toast Notification */}
@@ -341,8 +525,15 @@ export default function App() {
           setIsAddEditModalOpen(true);
         }}
         onExportCSV={handleExportCSV}
+        onImportCSV={() => setIsImportCsvOpen(true)}
         onResetData={handleResetData}
         onOpenNetworkShare={() => setIsNetworkShareOpen(true)}
+        onOpenSalesReport={() => setIsSalesReportOpen(true)}
+        onOpenRecordSale={() => {
+          setRecordSaleTargetItem(null);
+          setIsRecordSaleOpen(true);
+        }}
+        salesCount={sales.length}
         itemCount={items.length}
         isSyncConnected={isSyncConnected}
         syncVersion={syncVersion}
@@ -353,11 +544,14 @@ export default function App() {
         {/* Formula Bar with Excel IF specification */}
         <FormulaBar />
 
-        {/* Stats Metrics */}
+        {/* Stats Metrics (including Sales Revenue & quick launcher) */}
         <StatsCards
           items={items}
           onFilterByStatus={setStatusFilter}
           currentStatusFilter={statusFilter}
+          totalSalesRevenue={totalSalesRevenue}
+          salesCount={sales.length}
+          onOpenSalesReport={() => setIsSalesReportOpen(true)}
         />
 
         {/* Inventory Tracking Table */}
@@ -366,6 +560,7 @@ export default function App() {
           resetKey={resetKey}
           items={items}
           onUpdateStock={handleUpdateStock}
+          onUpdatePrice={handleUpdatePrice}
           onEditItem={(item) => {
             setEditingItem(item);
             setIsAddEditModalOpen(true);
@@ -373,6 +568,10 @@ export default function App() {
           onDeleteItem={handleDeleteItem}
           onDeleteBatch={handleDeleteBatch}
           onRestockClick={(item) => setRestockingItem(item)}
+          onRecordSaleClick={(item) => {
+            setRecordSaleTargetItem(item);
+            setIsRecordSaleOpen(true);
+          }}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
         />
@@ -396,6 +595,7 @@ export default function App() {
         }}
         onSave={handleSaveItem}
         initialItem={editingItem}
+        availableCategories={Array.from(new Set(items.map((i) => i.category).filter(Boolean)))}
         onDelete={(id) => {
           const item = items.find((i) => i.id === id);
           if (item) {
@@ -410,6 +610,44 @@ export default function App() {
         onClose={() => setRestockingItem(null)}
         item={restockingItem}
         onRestock={handleRestock}
+      />
+
+      {/* Record Sale Modal */}
+      <RecordSaleModal
+        isOpen={isRecordSaleOpen}
+        onClose={() => {
+          setIsRecordSaleOpen(false);
+          setRecordSaleTargetItem(null);
+        }}
+        items={items}
+        preselectedItem={recordSaleTargetItem}
+        onRecordSale={handleRecordSale}
+      />
+
+      {/* Import Sales POS / CSV Modal */}
+      <ImportSalesModal
+        isOpen={isImportSalesOpen}
+        onClose={() => setIsImportSalesOpen(false)}
+        items={items}
+        onImportSales={handleImportSales}
+      />
+
+      {/* Comprehensive Sales Report Modal */}
+      <SalesReportModal
+        isOpen={isSalesReportOpen}
+        onClose={() => setIsSalesReportOpen(false)}
+        sales={sales}
+        items={items}
+        onOpenRecordSale={() => {
+          setIsSalesReportOpen(false);
+          setRecordSaleTargetItem(null);
+          setIsRecordSaleOpen(true);
+        }}
+        onOpenImportSales={() => {
+          setIsSalesReportOpen(false);
+          setIsImportSalesOpen(true);
+        }}
+        onDeleteSale={handleDeleteSale}
       />
 
       {/* Single Item Delete Confirmation Modal */}
@@ -455,6 +693,14 @@ export default function App() {
           onAction: handleClearAllData,
           variant: 'danger',
         }}
+      />
+
+      {/* CSV / QuickBooks Import Modal */}
+      <ImportCsvModal
+        isOpen={isImportCsvOpen}
+        onClose={() => setIsImportCsvOpen(false)}
+        onImport={handleImportCSV}
+        existingPartNumbers={items.map((i) => i.partNumber)}
       />
     </div>
   );
