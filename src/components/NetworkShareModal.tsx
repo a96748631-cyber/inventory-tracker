@@ -138,18 +138,18 @@ export const NetworkShareModal: React.FC<NetworkShareModalProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Local Network Address (When running locally from ZIP):
+                  Your Computer's Local Wi-Fi Address (for your Phone or Tablet):
                 </label>
                 <div className="space-y-2">
                   {localUrls.map((url, idx) => (
                     <div
                       key={url}
-                      className="flex items-center justify-between p-3 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs sm:text-sm text-slate-900 shadow-2xs"
+                      className="flex items-center justify-between p-3 bg-amber-50/60 border border-amber-200 rounded-xl font-mono text-xs sm:text-sm text-slate-900 shadow-2xs"
                     >
-                      <span className="font-bold text-amber-800">{url}</span>
+                      <span className="font-bold text-amber-900">{url}</span>
                       <button
                         onClick={() => handleCopy(url, `local-${idx}`)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
@@ -169,8 +169,39 @@ export const NetworkShareModal: React.FC<NetworkShareModalProps> = ({
                     </div>
                   ))}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2">
-                  Use this when hosting directly on your office computer via `npm run dev` and connecting devices on the same Wi-Fi.
+              </div>
+
+              {/* QR Code section for instant scanning */}
+              {localUrls.length > 0 && !localUrls[0].includes('192.168.1.X') && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-4">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&margin=4&data=${encodeURIComponent(localUrls[0])}`}
+                    alt="Scan with phone"
+                    className="w-20 h-20 bg-white p-1 rounded-lg border border-slate-200 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="text-xs text-slate-600 space-y-1">
+                    <p className="font-semibold text-slate-900">Scan with your Phone Camera:</p>
+                    <p className="text-[11px] text-slate-500 leading-snug">
+                      Open your phone camera and point it at this QR code to jump straight to the app on your phone.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Troubleshooting checklist */}
+              <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                <p className="font-bold text-amber-950 flex items-center gap-1.5">
+                  <span>📱</span> Why didn't `localhost:3000` work on your phone?
+                </p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  <strong>1. Never type 'localhost' on your phone:</strong> "localhost" means the phone itself. Use the exact number above (e.g. <code>{localUrls[0]}</code>).
+                </p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  <strong>2. Same Wi-Fi network:</strong> Make sure your phone's Wi-Fi is turned ON and connected to the exact same Wi-Fi router as your computer (turn off mobile data if it doesn't switch).
+                </p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  <strong>3. Windows Firewall:</strong> When running on Windows, make sure Windows Defender Firewall allows Node.js / tsx on Private networks.
                 </p>
               </div>
             </div>

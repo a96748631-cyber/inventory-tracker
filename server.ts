@@ -278,7 +278,26 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Mashkay Autoparts Server running at http://0.0.0.0:${PORT}`);
+    console.log(`\n==================================================`);
+    console.log(`  Mashkay Commercial Fleet Inventory Server`);
+    console.log(`==================================================`);
+    console.log(`  > On this PC (Local):       http://localhost:${PORT}`);
+    
+    const interfaces = os.networkInterfaces();
+    let foundNetwork = false;
+    for (const ifaceName of Object.keys(interfaces)) {
+      for (const iface of interfaces[ifaceName] || []) {
+        if (iface.family === "IPv4" && !iface.internal) {
+          console.log(`  > On your Phone / Tablet:   http://${iface.address}:${PORT}`);
+          foundNetwork = true;
+        }
+      }
+    }
+    if (!foundNetwork) {
+      console.log(`  > Network: Connect your PC to Wi-Fi to access from your phone`);
+    }
+    console.log(`  (Note: Both phone and PC must be on the same Wi-Fi)`);
+    console.log(`==================================================\n`);
   });
 }
 
